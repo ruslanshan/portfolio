@@ -144,8 +144,9 @@ table.t td.n,table.t th.n{text-align:right;white-space:nowrap}
 
 <script>
 /* ===================== версия ===================== */
-const APP_VERSION='1.5.4';
+const APP_VERSION='1.5.5';
 const CHANGELOG=[
+ {v:'1.5.5',d:'23.09.2026',items:['Переоценка показывает, сколько позиция стоила до и сколько станет, и какой получится результат','Если деньги на позицию пришли в стейблкоинах (например, USDT на бирже как маржа фьючерсов), при переоценке их можно сразу перенести в позицию – тогда результат площадки считается верно','Переоценка всегда применяется после других операций того же дня']},
  {v:'1.5.4',d:'23.09.2026',items:['В «Истории» при выборе площадки итоги считаются по этой площадке: что куплено на ней, что пришло переводами с других площадок, что продано и выведено','Для площадки видно, сколько на ней сейчас и какой на ней результат','«Взносы по месяцам» и «Куда вложено» для площадки тоже учитывают переводы']},
  {v:'1.5.3',d:'23.09.2026',items:['Фильтры в «Истории» теперь меняют всё: итоги, взносы по месяцам, «Куда вложено» и хронологию','При выборе актива видно, сколько штук пришло, ушло и сколько осталось на выбранной площадке','Показано число найденных операций и кнопка «Сбросить фильтры»','Фильтры сбрасываются при переключении на другого клиента']},
  {v:'1.5.2',d:'23.09.2026',items:['Исправлено: в обмене стейблкоина на монету сумма сделки бралась по текущему курсу, а не по отданным USDT. Теперь цена сделки считается по стейблкоину, старые обмены пересчитаны','Подсказка о средней цене переписана понятнее и предупреждает, если цена сделки подозрительно отличается от рыночной','В «Средних ценах» можно открыть актив и увидеть все сделки, из которых сложилась средняя, с подсветкой подозрительных']},
@@ -250,7 +251,7 @@ function ledger(p,prices,until){
   const key=(a,l)=>a+'|'+l;
   const add=(a,l,q,c)=>{const k=key(a,l);pos[k]=pos[k]||{asset:a,loc:l,qty:0,cost:0};pos[k].qty+=q;pos[k].cost+=c};
   const rm=(a,l,q)=>{const k=key(a,l);const x=pos[k]||(pos[k]={asset:a,loc:l,qty:0,cost:0});const ratio=x.qty>0?Math.min(1,q/x.qty):0;const c=x.cost*ratio;x.qty-=q;x.cost-=c;return c};
-  const txs=p.txs.filter(t=>!until||t.date<=until).slice().sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:0);
+  const txs=p.txs.filter(t=>!until||t.date<=until).slice().sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:(a.type==='revalue')-(b.type==='revalue'));
   for(const t of txs){
     const v=num(t.value);
     if(t.type==='buy'){add(t.asset,t.loc,num(t.qty),v);inflow+=v}
@@ -295,6 +296,28 @@ const isDollarA=a=>!!(S.assets[a]&&(S.assets[a].stable||S.assets[a].kind==='usd'
 function swapValue(o){const q=num(o.qty),tq=num(o.toQty);if(isDollarA(o.asset))return r2(q);if(isDollarA(o.toAsset))return r2(tq);return num(o.value)||r2(tq*(S.prices[o.toAsset]||0))}
 function priceWarn(a,pr){const cp=S.prices[a];if(!cp||!pr)return'';const d=pr/cp-1;return Math.abs(d)>0.5?`<br><span class="down">Цена сделки на ${pct(Math.abs(d),{dec:0})} ${d>0?'выше':'ниже'} текущей (${up(cp)}) – проверьте количество и сумму.</span>`:''}
 function avgWarn(a,avg){const cp=S.prices[a];if(!cp||!avg)return'';return avg/cp>3||avg/cp<0.2?`<br><span class="down">Текущая средняя ${up(avg)} выглядит странно для ${esc(a)} – похоже, в одной из прошлых сделок ошибка. Проверьте: Активы → Средние цены → ${esc(a)}.</span>`:''}
+function rvState(p,o){
+  const loc=o.loc&&o.loc!=='__new'?o.loc:(p.locations[0]||{}).id;
+  const L=ledger({...p,txs:p.txs.filter(x=>x.id!==o.id)},S.prices);
+  const cur=L.pos.filter(x=>x.asset===o.asset&&x.loc===loc).reduce((a,x)=>a+x.value,0);
+  const st=L.pos.filter(x=>x.loc===loc&&S.assets[x.asset]&&S.assets[x.asset].stable&&x.qty>0.005).sort((a,b)=>b.value-a.value);
+  return{loc,cur,st};
+}
+function rvBlock(p,o){
+  const r=rvState(p,o);if(!o.asset||!r.loc)return'';
+  const fund0=o.fund!=null&&o.fund!==''?o.fund:(r.st.length&&r.cur<0.01?r2(r.st[0].qty):'');
+  let h='';
+  if(r.st.length){h+=`<div class="card" style="margin-bottom:12px"><div class="small" style="margin-bottom:8px">На ${esc(locName(p,r.loc))} лежит ${r.st.map(x=>qfmt(x.qty,x.asset)+' '+esc(x.asset)).join(' и ')}. Если это деньги позиции «${esc(o.asset)}» (например, маржа фьючерсов), перенесите их в позицию – иначе они считаются отдельно и результат площадки будет неверным.</div>
+    <div class="grid2"><div class="field" style="margin:0"><label>Перенести из</label><select class="inp" name="fundAsset">${r.st.map(x=>`<option value="${esc(x.asset)}">${esc(x.asset)} (${qfmt(x.qty,x.asset)})</option>`).join('')}</select></div><div class="field" style="margin:0"><label>Сколько</label><input class="inp" inputmode="decimal" name="fund" value="${fund0}" data-rv></div></div></div>`}
+  h+=`<div id="rvInfo" class="callout teal small" style="margin:0 0 12px">${rvInfoHtml(p,{...o,fund:fund0})}</div>`;
+  return h;
+}
+function rvInfoHtml(p,o){
+  const r=rvState(p,o);const fund=num(o.fund);const before=r.cur+fund;const v=num(o.value);
+  if(String(o.value??'').trim()==='')return`Позиция «${esc(o.asset)}» на ${esc(locName(p,r.loc))} сейчас учтена в ${money(before)}${fund?` (с переносом ${money(fund)})`:''}. Впишите, сколько она стоит на самом деле.`;
+  const d=v-before;
+  return`Было учтено ${money(before)}${fund?` (включая перенос ${money(fund)})`:''} → станет <b>${money(v)}</b>. Результат переоценки: <b class="${cls(d)}">${money(d,{sign:true})}</b>${before>0?' ('+pct(d/before,{sign:true})+')':''}.`;
+}
 function txInfoHtml(o){
   const p=P();const a=o.asset;const ty=o.type;if(!a||!showAvg(a)&&ty!=='swap')return'';
   const ST=assetStats(p,o.id);const st=ST[a]||{bq:0,bu:0,sq:0,su:0};const q=num(o.qty);
@@ -801,12 +824,13 @@ function txForm(t){
   <div class="small muted" style="margin:-4px 0 12px">${{buy:'Новые деньги клиента заходят в актив – учитывается как вложение.',sell:'Актив продан и выведен из портфеля в реальную жизнь.',swap:'Один актив обменян на другой внутри портфеля, деньги не заходят и не выходят.',income:'Проценты лендинга, стейкинг, премия опционов, прибыль бота – это заработок, не вложение.',transfer:'Перенос актива с одной площадки на другую.',revalue:'Укажите, сколько позиция стоит сейчас. Разница с прошлой стоимостью станет прибылью или убытком, вложения не меняются.'}[ty]}</div>
   <div class="grid2"><div class="field"><label>Дата</label><input class="inp" type="date" name="date" value="${t.date||today()}"></div>
   <div class="field"><label>${ty==='swap'?'Отдаю актив':'Актив'}</label><select class="inp" name="asset" data-rerender>${assetOpts(a0,ty==='revalue'?isUsdA:null)}</select></div></div>
-  ${ty==='revalue'?`<div class="field"><label>Текущая стоимость, $</label><input class="inp" inputmode="decimal" name="value" value="${t.value??''}"></div>`:`<div class="grid2"><div class="field"><label>${isU?'Сумма, $':'Количество'}</label><input class="inp" inputmode="decimal" name="qty" value="${t.qty??''}" placeholder="${isU?'1000':'0.05'}" data-calc="qty"></div>
+  ${ty==='revalue'?`<div class="field"><label>Сколько позиция стоит сейчас (остаток), $</label><input class="inp" inputmode="decimal" name="value" value="${t.value??''}" data-rv></div>`:`<div class="grid2"><div class="field"><label>${isU?'Сумма, $':'Количество'}</label><input class="inp" inputmode="decimal" name="qty" value="${t.qty??''}" placeholder="${isU?'1000':'0.05'}" data-calc="qty"></div>
   ${ty==='swap'||ty==='transfer'||isU?`<input type="hidden" name="price" value="${pr}"><div></div>`:`<div class="field"><label>Цена за 1, $</label><input class="inp" inputmode="decimal" name="price" value="${pr}" data-calc="price"></div>`}</div>
   ${['buy','sell','income'].includes(ty)&&!isU?`<div class="field"><label>Сумма сделки, $</label><input class="inp" inputmode="decimal" name="total" value="${t.total??t.value??''}" data-calc="total" placeholder="сколько вложено или получено"></div>`:''}`}
   <div class="field"><label>${ty==='transfer'?'Откуда':'Площадка'}</label><select class="inp" name="loc" data-newsel="loc">${locOpts(p,t.loc)}</select></div>${newLoc('loc',t.loc)}`;
   if(ty==='swap'){h+=`<div class="grid2"><div class="field"><label>Получаю актив</label><select class="inp" name="toAsset" data-rerender>${assetOpts(t.toAsset||'USDT')}</select></div><div class="field"><label>Количество</label><input class="inp" inputmode="decimal" name="toQty" value="${t.toQty??''}" data-calc="toQty"></div></div>
    ${isDollarA(a0)||isDollarA(t.toAsset||'USDT')?`<input type="hidden" name="value" value="${t.value??''}"><p class="small muted" style="margin:-4px 0 12px">Сумма сделки в $ считается по стейблкоину автоматически.</p>`:`<div class="field"><label>Сумма сделки, $ на дату обмена</label><input class="inp" inputmode="decimal" name="value" value="${t.value??''}" placeholder="если пусто – по текущему курсу" data-calc="value"></div>`}`}
+  if(ty==='revalue')h+=rvBlock(p,{...t,asset:a0});
   if(ty==='transfer'){h+=`<div class="field"><label>Куда</label><select class="inp" name="toLoc" data-newsel="toLoc">${locOpts(p,t.toLoc)}</select></div>${newLoc('toLoc',t.toLoc)}<div class="field"><label>Комиссия сети, в штуках актива</label><input class="inp" inputmode="decimal" name="fee" value="${t.fee??''}" placeholder="0"></div>`}
   h+=`${ty==='revalue'||ty==='transfer'||ty==='income'?'':`<div id="txInfo" class="callout teal small" style="margin:0 0 12px;${txInfoHtml({...t,asset:a0,type:ty})?'':'display:none'}">${txInfoHtml({...t,asset:a0,type:ty})}</div>`}<div class="field"><label>Заметка</label><input class="inp" name="note" value="${esc(t.note||'')}" placeholder="необязательно"></div>
   <div class="btns"><button class="btn primary" data-a="saveTx">${t.id?'Сохранить':'Добавить'}</button>${t.id?'<button class="btn danger" data-a="delTx">Удалить</button>':''}</div></form>`;
@@ -1163,6 +1187,8 @@ const A={
     const p=P();const o=readForm('#txf');const qty=num(o.qty);
     if(o.type==='revalue'){if(!isUsdA(o.asset))return toast('Выберите свою позицию');const lc=ensureLoc(p,o,'loc');if(!lc)return toast('Выберите или назовите площадку');if(String(o.value||'').trim()==='')return toast('Укажите текущую стоимость');
       const t={id:o.id||uid(),type:'revalue',date:o.date||today(),asset:o.asset,loc:lc,qty:0,value:r2(Math.max(0,num(o.value))),note:o.note||''};
+      const fund=num(o.fund);if(fund>0&&o.fundAsset){const r=rvState(p,{...o,loc:lc});const have=(r.st.find(x=>x.asset===o.fundAsset)||{qty:0}).qty;if(fund>have+0.01)return toast(`На площадке только ${qfmt(have,o.fundAsset)} ${o.fundAsset}`);
+        p.txs.push({id:uid(),type:'swap',date:t.date,asset:o.fundAsset,qty:fund,toAsset:o.asset,toQty:fund,value:r2(fund),loc:lc,toLoc:lc,note:'перенос в «'+o.asset+'» перед переоценкой'})}
       const i=p.txs.findIndex(x=>x.id===t.id);if(i>=0)p.txs[i]=t;else p.txs.push(t);closeSheet();save();haptic();return toast('Стоимость обновлена')}
     if(!(qty>0))return toast(isUsdA(o.asset)?'Укажите сумму':'Укажите количество');
     const loc=ensureLoc(p,o,'loc');if(!loc)return toast('Выберите или назовите площадку');
@@ -1258,6 +1284,7 @@ document.addEventListener('change',e=>{
   if(el.dataset.w!==undefined){W.d[el.dataset.w]=num(el.value);render();return}
   if(el.dataset.al){const al=W?W.d.alloc:p.plan.alloc;const a=al[+el.dataset.i];if(el.dataset.al==='k')a.k=el.value;else a.pct=num(el.value);if(W)render();else{save({silent:true});A.editAlloc()}return}
   if(el.dataset.rerender!==undefined){const o=readForm('#txf');if(el.name==='asset'){o.price=S.prices[o.asset]||''}if(el.name==='type'&&o.type==='revalue'&&!isUsdA(o.asset))o.asset=null;openSheet(o.id?'Операция':'Новая операция',txForm(o));return}
+  if(el.dataset.newsel&&el.closest('#txf')&&readForm('#txf').type==='revalue'&&el.value!=='__new'){const o=readForm('#txf');o.fund='';openSheet(o.id?'Операция':'Новая операция',txForm(o));return}
   if(el.dataset.newsel){const box=document.querySelector(`[data-newloc="${el.dataset.newsel}"]`);if(box)box.hidden=el.value!=='__new';return}
   if(el.dataset.pf){p[el.dataset.pf]=el.value;save();return}
   if(el.dataset.tier){p.fees.tiers[+el.dataset.i][el.dataset.tier]=num(el.value);save({silent:true});return}
@@ -1277,6 +1304,7 @@ document.addEventListener('input',e=>{
   const el=e.target;
   if(el.id==='srQ'){SEARCH_Q=el.value.trim();clearTimeout(SEARCH_T);SEARCH_T=setTimeout(()=>searchCoins(SEARCH_Q),350);return}
   if(el.dataset.w!==undefined&&W&&W.step===0){W.d[el.dataset.w]=num(el.value);const c=$('#wcalc');if(c)c.innerHTML=wizCalc(W.d,planCalc(W.d))}
+  if(el.dataset.rv!==undefined&&el.closest('#txf')){const box=$('#rvInfo');if(box)box.innerHTML=rvInfoHtml(P(),readForm('#txf'))}
   if(el.dataset.calc&&el.closest('#txf')){const f=el.closest('#txf').elements;const q=num(f.qty&&f.qty.value),pr=num(f.price&&f.price.value),tot=num(f.total&&f.total.value);
     if(f.total&&(el.dataset.calc==='qty'||el.dataset.calc==='price')&&q>0&&pr>0)f.total.value=r2(q*pr);
     if(el.dataset.calc==='total'&&tot>0){if(q>0)f.price.value=+(tot/q).toPrecision(8);else if(pr>0)f.qty.value=+(tot/pr).toPrecision(8)}
