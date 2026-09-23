@@ -144,8 +144,9 @@ table.t td.n,table.t th.n{text-align:right;white-space:nowrap}
 
 <script>
 /* ===================== версия ===================== */
-const APP_VERSION='1.5.1';
+const APP_VERSION='1.5.2';
 const CHANGELOG=[
+ {v:'1.5.2',d:'23.09.2026',items:['Исправлено: в обмене стейблкоина на монету сумма сделки бралась по текущему курсу, а не по отданным USDT. Теперь цена сделки считается по стейблкоину, старые обмены пересчитаны','Подсказка о средней цене переписана понятнее и предупреждает, если цена сделки подозрительно отличается от рыночной','В «Средних ценах» можно открыть актив и увидеть все сделки, из которых сложилась средняя, с подсветкой подозрительных']},
  {v:'1.5.1',d:'23.09.2026',items:['Курс валюты учёта теперь подтягивается для всех валют, включая BYN','Курсы валют берутся из банковских источников и обновляются вместе с курсами монет','Курс валюты можно задать вручную и потом вернуть автообновление']},
  {v:'1.5.0',d:'23.09.2026',items:['В операции можно указать сумму сделки – цена за 1 или количество посчитаются сами','При вводе операции видно цену сделки и как изменится средняя цена покупки актива','При продаже видно примерный результат сделки относительно средней цены покупки','Средние цены покупки и продажи каждого актива в «Позициях», на главном экране и в отчёте клиенту']},
  {v:'1.4.0',d:'23.09.2026',items:['Займы под залог: залог, долг, ставка, health factor, LTV и цена ликвидации','Долг учитывается в чистом капитале, прибыли, метриках и комиссиях','История инвестиций: взносы по месяцам, куда и когда вложено, продажи с прибылью по каждой сделке','Фильтры истории по типу операции, активу, площадке и году','Типы площадок можно добавлять, переименовывать и удалять']},
@@ -288,19 +289,38 @@ function assetStats(p,exclId){const m={};const g=a=>m[a]=m[a]||{bq:0,bu:0,sq:0,s
 const pdec=v=>v<1?6:v<10?4:v<1000?2:0;
 const up=v=>v==null||!isFinite(v)?'–':usd(v,pdec(v));
 const showAvg=a=>S.assets[a]&&!S.assets[a].stable&&!isUsdA(a);
+const isDollarA=a=>!!(S.assets[a]&&(S.assets[a].stable||S.assets[a].kind==='usd'));
+function swapValue(o){const q=num(o.qty),tq=num(o.toQty);if(isDollarA(o.asset))return r2(q);if(isDollarA(o.toAsset))return r2(tq);return num(o.value)||r2(tq*(S.prices[o.toAsset]||0))}
+function priceWarn(a,pr){const cp=S.prices[a];if(!cp||!pr)return'';const d=pr/cp-1;return Math.abs(d)>0.5?`<br><span class="down">Цена сделки на ${pct(Math.abs(d),{dec:0})} ${d>0?'выше':'ниже'} текущей (${up(cp)}) – проверьте количество и сумму.</span>`:''}
+function avgWarn(a,avg){const cp=S.prices[a];if(!cp||!avg)return'';return avg/cp>3||avg/cp<0.2?`<br><span class="down">Текущая средняя ${up(avg)} выглядит странно для ${esc(a)} – похоже, в одной из прошлых сделок ошибка. Проверьте: Активы → Средние цены → ${esc(a)}.</span>`:''}
 function txInfoHtml(o){
   const p=P();const a=o.asset;const ty=o.type;if(!a||!showAvg(a)&&ty!=='swap')return'';
   const ST=assetStats(p,o.id);const st=ST[a]||{bq:0,bu:0,sq:0,su:0};const q=num(o.qty);
   if(ty==='buy'||ty==='sell'){const v=num(o.total)||num(o.price)*q;if(!(q>0&&v>0))return'Укажите количество и цену за 1 или сумму сделки – покажу среднюю цену.';const pr=v/q;
-    if(ty==='buy'){const was=st.bq?st.bu/st.bq:null;const will=(st.bu+v)/(st.bq+q);return`Цена сделки <b>${up(pr)}</b> за 1 ${esc(a)}. Средняя цена покупки ${esc(a)}: ${was?up(was)+' → ':''}<b>${up(will)}</b>.`}
+    if(ty==='buy'){const was=st.bq?st.bu/st.bq:null;const will=(st.bu+v)/(st.bq+q);return`Вы покупаете ${esc(a)} по <b>${up(pr)}</b> за 1.<br>${was?`Средняя цена всех ваших покупок ${esc(a)} сейчас ${up(was)}, с этой сделкой станет <b>${up(will)}</b>.`:`Это первая покупка ${esc(a)} – средняя цена будет <b>${up(will)}</b>.`}${priceWarn(a,pr)}${avgWarn(a,was)}`}
     const avg=st.bq?st.bu/st.bq:null;const res=avg?(pr-avg)*q:null;const willS=(st.su+v)/(st.sq+q);
     return`Цена продажи <b>${up(pr)}</b> за 1 ${esc(a)}.${avg?` Средняя цена покупки ${up(avg)} – результат сделки примерно <b class="${cls(res)}">${money(res,{sign:true})} (${pct(pr/avg-1,{sign:true})})</b>.`:''} Средняя цена продажи ${esc(a)} станет ${up(willS)}.`}
-  if(ty==='swap'){const tq=num(o.toQty),v=num(o.value)||tq*(S.prices[o.toAsset]||0);if(!(q>0&&tq>0&&v>0))return'';const b=o.toAsset;const sb=ST[b]||{bq:0,bu:0};
-    let t=`${showAvg(a)?`Отдаёте ${esc(a)} по <b>${up(v/q)}</b>. `:''}${showAvg(b)?`Получаете ${esc(b)} по <b>${up(v/tq)}</b>.`:''}`;
-    if(showAvg(b))t+=` Средняя цена покупки ${esc(b)}: ${sb.bq?up(sb.bu/sb.bq)+' → ':''}<b>${up((sb.bu+v)/(sb.bq+tq))}</b>.`;
-    if(showAvg(a)&&st.bq){const avg=st.bu/st.bq;t+=` К средней покупки ${esc(a)} ${up(avg)}: <b class="${cls(v/q-avg)}">${pct(v/q/avg-1,{sign:true})}</b>.`}
-    return t}
+  if(ty==='swap'){const tq=num(o.toQty),v=swapValue(o);if(!(q>0&&tq>0&&v>0))return'';const b=o.toAsset;const sb=ST[b]||{bq:0,bu:0};const parts=[];
+    if(showAvg(b)){const pr=v/tq;const was=sb.bq?sb.bu/sb.bq:null;const will=(sb.bu+v)/(sb.bq+tq);
+      parts.push(`Вы покупаете ${esc(b)} по <b>${up(pr)}</b> за 1: ${qfmt(q,a)} ${esc(a)} за ${qfmt(tq,b)} ${esc(b)}.<br>${was?`Средняя цена всех ваших покупок ${esc(b)} сейчас ${up(was)}, с этой сделкой станет <b>${up(will)}</b>.`:`Это первая покупка ${esc(b)} – средняя цена будет <b>${up(will)}</b>.`}${priceWarn(b,pr)}${avgWarn(b,was)}`)}
+    if(showAvg(a)){const pr=v/q;const avg=st.bq?st.bu/st.bq:null;
+      parts.push(`Вы продаёте ${esc(a)} по <b>${up(pr)}</b> за 1.${avg?` Вы покупали его в среднем по ${up(avg)} – это <b class="${cls(pr-avg)}">${pct(pr/avg-1,{sign:true})}</b>, результат примерно <b class="${cls(pr-avg)}">${money((pr-avg)*q,{sign:true})}</b>.`:''}${priceWarn(a,pr)}`)}
+    return parts.join('<br><br>')}
   return'';
+}
+function avgDealsHtml(p,a){
+  const rows=[];p.txs.forEach(t=>{const q=num(t.qty),v=num(t.value);
+    if(t.type==='buy'&&t.asset===a)rows.push({t,side:'b',q,v,txt:'Покупка'});
+    if(t.type==='swap'&&t.toAsset===a)rows.push({t,side:'b',q:num(t.toQty),v,txt:`Обмен ${esc(t.asset)} → ${esc(a)}`});
+    if(t.type==='sell'&&t.asset===a)rows.push({t,side:'s',q,v,txt:'Продажа'});
+    if(t.type==='swap'&&t.asset===a)rows.push({t,side:'s',q,v,txt:`Обмен ${esc(a)} → ${esc(t.toAsset)}`})});
+  rows.sort((x,y)=>x.t.date<y.t.date?1:-1);
+  const prs=rows.filter(r=>r.q>0).map(r=>r.v/r.q).sort((x,y)=>x-y);const med=prs.length?prs[Math.floor(prs.length/2)]:0;
+  const cp=S.prices[a]||med;
+  const st=assetStats(p)[a]||{};
+  return`<div class="card"><div class="kv"><span>Средняя цена покупки</span><span class="v">${up(st.avgBuy)}</span><span>Куплено всего</span><span class="v">${qfmt(st.bq||0,a)} ${esc(a)} за ${money(st.bu||0)}</span>${st.sq?`<span>Средняя цена продажи</span><span class="v">${up(st.avgSell)}</span>`:''}<span>Текущая цена</span><span class="v">${up(S.prices[a])}</span></div>
+  <p class="small muted" style="margin:10px 0 0">Средняя покупки = все потраченные $ ÷ всё купленное количество. Сделки с ценой, которая сильно отличается от остальных, подсвечены – скорее всего, в них ошибка в количестве или сумме. Нажмите на сделку, чтобы исправить.</p></div>
+  <div class="list" style="margin-top:12px">${rows.map(r=>{const pr=r.q?r.v/r.q:0;const odd=cp&&pr&&(pr/cp>2.5||pr/cp<0.4);return`<button class="row btnrow" data-a="editTx" data-k="${r.t.id}" ${odd?'style="background:var(--gold-soft)"':''}><div class="grow"><div><b>${r.txt}</b> <span class="small muted">${new Date(r.t.date).toLocaleDateString('ru-RU')}</span></div><div class="small muted">${qfmt(r.q,a)} ${esc(a)} за ${usd(r.v)}</div>${odd?'<div class="small down">Цена сильно отличается – проверьте</div>':''}</div><div class="r"><b>${up(pr)}</b><div class="small muted">${r.side==='b'?'покупка':'продажа'}</div></div></button>`}).join('')}</div>`;
 }
 function byAsset(L){const m={};L.pos.forEach(x=>{const a=m[x.asset]=m[x.asset]||{asset:x.asset,qty:0,value:0,cost:0,locs:[]};a.qty+=x.qty;a.value+=x.value;a.cost+=x.cost;a.locs.push(x)});return Object.values(m).sort((a,b)=>b.value-a.value)}
 function byLoc(p,L){const m={};L.pos.forEach(x=>{const l=m[x.loc]=m[x.loc]||{loc:x.loc,value:0,items:[]};l.value+=x.value;l.items.push(x)});return Object.values(m).sort((a,b)=>b.value-a.value)}
@@ -609,7 +629,7 @@ function vAssets(){
   if(!assets.length)h+=`<div class="card muted">Пока пусто. Добавьте покупку или перенос уже имеющихся активов операцией «Покупка / пополнение» – по цене, за которую они были куплены.</div>`;
   else h+=`<div class="list">${assets.map(a=>{const open=OPEN_ASSET===a.asset;const pn=a.value-a.cost;return`<button class="row btnrow" data-a="openAsset" data-k="${a.asset}" aria-expanded="${open}"><div class="grow"><b>${esc(a.asset)}</b> <span class="muted small">${isUsdA(a.asset)?'вложено '+money(a.cost):`${qfmt(a.qty,a.asset)} шт.${showAvg(a.asset)&&ST1[a.asset]&&ST1[a.asset].avgBuy?', средняя покупки '+up(ST1[a.asset].avgBuy):''}`}</span></div><div class="r"><b>${money(a.value)}</b><div class="small ${cls(pn)}">${money(pn,{sign:true})}</div></div></button>${open?a.locs.map(x=>`<div class="row" style="padding-left:28px;background:var(--bg)"><div class="grow small">${esc(locName(p,x.loc))} <span class="muted">${esc(locKind(p,x.loc))}</span></div><div class="r small">${isUsdA(x.asset)?`<button class="btn sm" data-a="revalue" data-k="${x.asset}" data-loc="${x.loc}">Переоценить</button> `:qfmt(x.qty,x.asset)+' · '}${money(x.value)}</div></div>`).join(''):''}`}).join('')}</div>`;
   {const rows=Object.keys(ST1).filter(k=>showAvg(k)&&(ST1[k].bq>0||ST1[k].sq>0)).sort((a,b)=>ST1[b].bu-ST1[a].bu);
-   if(rows.length)h+=`<h2>Средние цены</h2><div class="card scroll"><table class="t"><thead><tr><th>Актив</th><th class="n">Покупка</th><th class="n">Продажа</th><th class="n">Сейчас</th></tr></thead><tbody>${rows.map(k=>{const x=ST1[k];const cp=S.prices[k];const d=x.avgBuy&&cp?cp/x.avgBuy-1:null;return`<tr><td><b>${esc(k)}</b></td><td class="n">${up(x.avgBuy)}<div class="small muted">${x.nb?x.nb+' сдел.':''}</div></td><td class="n">${up(x.avgSell)}<div class="small muted">${x.ns?x.ns+' сдел.':''}</div></td><td class="n">${up(cp)}<div class="small ${cls(d)}">${d!=null?pct(d,{sign:true}):''}</div></td></tr>`}).join('')}</tbody></table><p class="small muted" style="margin:8px 0 0">Средние цены покупки и продажи. Покупки – операции «Покупка» и обмены в этот актив, продажи – «Продажа» и обмены из него. Процент – текущая цена к средней цене покупки.</p></div>`}
+   if(rows.length)h+=`<h2>Средние цены</h2><div class="card scroll"><table class="t"><thead><tr><th>Актив</th><th class="n">Покупка</th><th class="n">Продажа</th><th class="n">Сейчас</th></tr></thead><tbody>${rows.map(k=>{const x=ST1[k];const cp=S.prices[k];const d=x.avgBuy&&cp?cp/x.avgBuy-1:null;return`<tr data-a="avgDeals" data-k="${esc(k)}" style="cursor:pointer"><td><b>${esc(k)}</b><div class="small muted">сделки ›</div></td><td class="n">${up(x.avgBuy)}<div class="small muted">${x.nb?x.nb+' сдел.':''}</div></td><td class="n">${up(x.avgSell)}<div class="small muted">${x.ns?x.ns+' сдел.':''}</div></td><td class="n">${up(cp)}<div class="small ${cls(d)}">${d!=null?pct(d,{sign:true}):''}</div></td></tr>`}).join('')}</tbody></table><p class="small muted" style="margin:8px 0 0">Средние цены покупки и продажи. Покупки – операции «Покупка» и обмены в этот актив, продажи – «Продажа» и обмены из него. Процент – текущая цена к средней цене покупки.</p></div>`}
   if(L.debt>0.01)h+=`<p class="small muted">Заёмные средства входят в позиции, а долг ${money(L.debt)} вычитается из чистого капитала. Подробности – во вкладке «Займы».</p>`;
   h+=`<p class="small muted">Все операции с датами, взносами и продажами – во вкладке «История».</p>`;
   return h;
@@ -745,8 +765,8 @@ function txForm(t){
   ${ty==='swap'||ty==='transfer'||isU?`<input type="hidden" name="price" value="${pr}"><div></div>`:`<div class="field"><label>Цена за 1, $</label><input class="inp" inputmode="decimal" name="price" value="${pr}" data-calc="price"></div>`}</div>
   ${['buy','sell','income'].includes(ty)&&!isU?`<div class="field"><label>Сумма сделки, $</label><input class="inp" inputmode="decimal" name="total" value="${t.total??t.value??''}" data-calc="total" placeholder="сколько вложено или получено"></div>`:''}`}
   <div class="field"><label>${ty==='transfer'?'Откуда':'Площадка'}</label><select class="inp" name="loc" data-newsel="loc">${locOpts(p,t.loc)}</select></div>${newLoc('loc',t.loc)}`;
-  if(ty==='swap'){h+=`<div class="grid2"><div class="field"><label>Получаю актив</label><select class="inp" name="toAsset">${assetOpts(t.toAsset||'USDT')}</select></div><div class="field"><label>Количество</label><input class="inp" inputmode="decimal" name="toQty" value="${t.toQty??''}" data-calc="toQty"></div></div>
-   <div class="field"><label>Сумма сделки, $ (стоимость полученного)</label><input class="inp" inputmode="decimal" name="value" value="${t.value??''}" placeholder="если пусто – по текущему курсу" data-calc="value"></div>`}
+  if(ty==='swap'){h+=`<div class="grid2"><div class="field"><label>Получаю актив</label><select class="inp" name="toAsset" data-rerender>${assetOpts(t.toAsset||'USDT')}</select></div><div class="field"><label>Количество</label><input class="inp" inputmode="decimal" name="toQty" value="${t.toQty??''}" data-calc="toQty"></div></div>
+   ${isDollarA(a0)||isDollarA(t.toAsset||'USDT')?`<input type="hidden" name="value" value="${t.value??''}"><p class="small muted" style="margin:-4px 0 12px">Сумма сделки в $ считается по стейблкоину автоматически.</p>`:`<div class="field"><label>Сумма сделки, $ на дату обмена</label><input class="inp" inputmode="decimal" name="value" value="${t.value??''}" placeholder="если пусто – по текущему курсу" data-calc="value"></div>`}`}
   if(ty==='transfer'){h+=`<div class="field"><label>Куда</label><select class="inp" name="toLoc" data-newsel="toLoc">${locOpts(p,t.toLoc)}</select></div>${newLoc('toLoc',t.toLoc)}<div class="field"><label>Комиссия сети, в штуках актива</label><input class="inp" inputmode="decimal" name="fee" value="${t.fee??''}" placeholder="0"></div>`}
   h+=`${ty==='revalue'||ty==='transfer'||ty==='income'?'':`<div id="txInfo" class="callout teal small" style="margin:0 0 12px;${txInfoHtml({...t,asset:a0,type:ty})?'':'display:none'}">${txInfoHtml({...t,asset:a0,type:ty})}</div>`}<div class="field"><label>Заметка</label><input class="inp" name="note" value="${esc(t.note||'')}" placeholder="необязательно"></div>
   <div class="btns"><button class="btn primary" data-a="saveTx">${t.id?'Сохранить':'Добавить'}</button>${t.id?'<button class="btn danger" data-a="delTx">Удалить</button>':''}</div></form>`;
@@ -1046,6 +1066,7 @@ function loadDemo(){
 
 /* ===================== события ===================== */
 const A={
+  avgDeals:d=>openSheet(`${d.k}: сделки и средняя цена`,avgDealsHtml(P(),d.k)),
   fxAuto:()=>{const c=S.settings.currency;if(S.settings.fxManual)delete S.settings.fxManual[c];save({silent:true});openSettings();toast('Загружаю курс…');refreshFx().then(ok=>{if(!$('#sheet').hidden)openSettings();toast(ok?'Курс обновлён':'Не удалось загрузить курс')})},
   asub:d=>{ASUB=d.k;render()},
   goLoans:()=>{TAB='assets';ASUB='loans';render();window.scrollTo(0,0)},
@@ -1106,7 +1127,7 @@ const A={
     const loc=ensureLoc(p,o,'loc');if(!loc)return toast('Выберите или назовите площадку');
     const t={id:o.id||uid(),type:o.type,date:o.date||today(),asset:o.asset,qty,loc,note:o.note||''};
     if(['buy','sell','income'].includes(o.type)){const tot=isUsdA(o.asset)?0:num(o.total);const pr=isUsdA(o.asset)?1:(num(o.price)||(tot>0?tot/qty:0));if(!(pr>0))return toast('Укажите цену за 1 или сумму сделки');t.value=r2(tot>0?tot:pr*qty);t.price=t.value/qty}
-    if(o.type==='swap'){t.toAsset=o.toAsset;t.toQty=num(o.toQty);if(!(t.toQty>0))return toast('Укажите, сколько получено');t.toLoc=loc;t.value=num(o.value)||r2(t.toQty*(S.prices[t.toAsset]||0));if(!t.value)return toast('Укажите сумму сделки')}
+    if(o.type==='swap'){t.toAsset=o.toAsset;t.toQty=num(o.toQty);if(!(t.toQty>0))return toast('Укажите, сколько получено');t.toLoc=loc;t.value=swapValue(o);if(!t.value)return toast('Укажите сумму сделки в $')}
     if(o.type==='transfer'){const to=ensureLoc(p,o,'toLoc');if(!to)return toast('Куда переводим?');t.toLoc=to;t.fee=num(o.fee);t.value=0}
     const i=p.txs.findIndex(x=>x.id===t.id);if(i>=0)p.txs[i]=t;else p.txs.push(t);
     closeSheet();save();haptic();toast(i>=0?'Сохранено':'Операция добавлена');
@@ -1230,9 +1251,10 @@ document.addEventListener('input',e=>{
   const qs=new URLSearchParams(location.search);
   const qApi=qs.get('api');if(qApi&&/^https:\/\//.test(qApi)&&S.settings.api!==qApi){S.settings.api=qApi;if(local)save({silent:true})}
   const restoreToken=qs.get('restore');
-  if(!local){S.seenVersion=APP_VERSION;startWizard()}else render();
+  if(local&&!S.fix152){let n=0;S.portfolios.forEach(p=>p.txs.forEach(t=>{if(t.type==='swap'&&(isDollarA(t.asset)||isDollarA(t.toAsset))){const v=swapValue(t);if(v>0&&Math.abs(v-num(t.value))>0.01){t.value=v;n++}}}));S.fix152=true;if(n){S.fixCount=n}save({silent:true})}
+  if(!local){S.seenVersion=APP_VERSION;S.fix152=true;startWizard()}else render();
   if(restoreToken&&inTG&&apiUrl())restoreFromBot(restoreToken);
-  else if(local&&S.seenVersion!==APP_VERSION){const from=S.seenVersion;S.seenVersion=APP_VERSION;save({silent:true});openSheet('Что нового',whatsNewHtml(from||'1.0.0'))}
+  else if(local&&S.seenVersion!==APP_VERSION){const from=S.seenVersion;S.seenVersion=APP_VERSION;save({silent:true});openSheet('Что нового',(S.fixCount?`<div class="callout teal">Пересчитано обменов со стейблкоинами: ${S.fixCount}. Средние цены теперь верные.</div>`:'')+whatsNewHtml(from||'1.0.0'));S.fixCount=0}
   refreshPrices(false);
   initCloud();
   setInterval(()=>refreshPrices(false),5*60*1000);
