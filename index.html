@@ -144,8 +144,9 @@ table.t td.n,table.t th.n{text-align:right;white-space:nowrap}
 
 <script>
 /* ===================== версия ===================== */
-const APP_VERSION='1.5.2';
+const APP_VERSION='1.5.3';
 const CHANGELOG=[
+ {v:'1.5.3',d:'23.09.2026',items:['Фильтры в «Истории» теперь меняют всё: итоги, взносы по месяцам, «Куда вложено» и хронологию','При выборе актива видно, сколько штук пришло, ушло и сколько осталось на выбранной площадке','Показано число найденных операций и кнопка «Сбросить фильтры»','Фильтры сбрасываются при переключении на другого клиента']},
  {v:'1.5.2',d:'23.09.2026',items:['Исправлено: в обмене стейблкоина на монету сумма сделки бралась по текущему курсу, а не по отданным USDT. Теперь цена сделки считается по стейблкоину, старые обмены пересчитаны','Подсказка о средней цене переписана понятнее и предупреждает, если цена сделки подозрительно отличается от рыночной','В «Средних ценах» можно открыть актив и увидеть все сделки, из которых сложилась средняя, с подсветкой подозрительных']},
  {v:'1.5.1',d:'23.09.2026',items:['Курс валюты учёта теперь подтягивается для всех валют, включая BYN','Курсы валют берутся из банковских источников и обновляются вместе с курсами монет','Курс валюты можно задать вручную и потом вернуть автообновление']},
  {v:'1.5.0',d:'23.09.2026',items:['В операции можно указать сумму сделки – цена за 1 или количество посчитаются сами','При вводе операции видно цену сделки и как изменится средняя цена покупки актива','При продаже видно примерный результат сделки относительно средней цены покупки','Средние цены покупки и продажи каждого актива в «Позициях», на главном экране и в отчёте клиенту']},
@@ -647,15 +648,33 @@ function vHistory(p,L){
   const years=[...new Set(p.txs.map(t=>t.date.slice(0,4)))].sort().reverse();
   const assetsUsed=[...new Set(p.txs.flatMap(t=>[t.asset,t.toAsset]).filter(Boolean))];
   const match=(t,withType)=>(!HF.asset||t.asset===HF.asset||t.toAsset===HF.asset)&&(!HF.loc||t.loc===HF.loc||t.toLoc===HF.loc)&&(!HF.year||t.date.startsWith(HF.year))&&(!withType||HF.type==='all'||(HF.type==='loan'?(t.type==='borrow'||t.type==='repay'):t.type===HF.type));
-  const base=p.txs.filter(t=>match(t,false));const list=p.txs.filter(t=>match(t,true)).sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:0);
+  if(HF.loc&&!p.locations.some(l=>l.id===HF.loc))HF.loc='';if(HF.asset&&!assetsUsed.includes(HF.asset))HF.asset='';if(HF.year&&!years.includes(HF.year))HF.year='';
+  const list=p.txs.filter(t=>match(t,true)).sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:0);const base=list;
   const sum=(arr,ty)=>arr.filter(t=>t.type===ty).reduce((a,t)=>a+num(t.value),0);
   const inV=sum(base,'buy'),outV=sum(base,'sell'),incV=sum(base,'income');
   const realV=base.reduce((a,t)=>a+((L.info[t.id]||{}).realized||0),0);
+  const active=HF.type!=='all'||HF.asset||HF.loc||HF.year;
+  let qIn=0,qOut=0;const A_=HF.asset;const lm=l=>!HF.loc||l===HF.loc;
+  if(A_)list.forEach(t=>{const q=num(t.qty);
+    if(['buy','income','borrow'].includes(t.type)&&t.asset===A_&&lm(t.loc))qIn+=q;
+    else if(['sell','repay'].includes(t.type)&&t.asset===A_&&lm(t.loc))qOut+=q;
+    else if(t.type==='swap'){if(t.asset===A_&&lm(t.loc))qOut+=q;if(t.toAsset===A_&&lm(t.toLoc||t.loc))qIn+=num(t.toQty)}
+    else if(t.type==='transfer'&&t.asset===A_&&HF.loc){if(t.loc===HF.loc)qOut+=q;if(t.toLoc===HF.loc)qIn+=q-num(t.fee)}});
+  const nowQ=A_?L.pos.filter(x=>x.asset===A_&&lm(x.loc)).reduce((a,x)=>a+x.qty,0):0;
+  const nowV=A_?L.pos.filter(x=>x.asset===A_&&lm(x.loc)).reduce((a,x)=>a+x.value,0):0;
+  const row=(label,val,c,show)=>show?`<span>${label}</span><span class="v ${c||''}">${val}</span>`:'';
+  const all=HF.type==='all';
   let h=`<div class="grid2" style="margin-top:14px"><div class="field"><label>Операции</label><select class="inp" data-hf="type">${Object.entries(HTYPES).map(([k,v])=>`<option value="${k}" ${k===HF.type?'selected':''}>${v}</option>`).join('')}</select></div>
   <div class="field"><label>Год</label><select class="inp" data-hf="year"><option value="">Всё время</option>${years.map(y=>`<option ${y===HF.year?'selected':''}>${y}</option>`).join('')}</select></div>
   <div class="field"><label>Актив</label><select class="inp" data-hf="asset"><option value="">Все активы</option>${assetsUsed.map(a=>`<option value="${esc(a)}" ${a===HF.asset?'selected':''}>${esc(a)}</option>`).join('')}</select></div>
   <div class="field"><label>Площадка</label><select class="inp" data-hf="loc"><option value="">Все площадки</option>${p.locations.map(l=>`<option value="${l.id}" ${l.id===HF.loc?'selected':''}>${esc(l.name)}</option>`).join('')}</select></div></div>
-  <div class="card"><div class="kv"><span>Внесено</span><span class="v">${money(inV)}</span><span>Выведено продажами</span><span class="v">${money(outV)}</span><span>Чистые вложения</span><span class="v">${money(inV-outV)}</span><span>Доход (лендинг, опционы, боты)</span><span class="v up">${money(incV)}</span><span>Зафиксированная прибыль</span><span class="v ${cls(realV)}">${money(realV,{sign:true})}</span></div></div>`;
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin:-2px 0 10px"><span class="small muted">Найдено операций: <b>${list.length}</b></span>${active?'<button class="btn sm" data-a="hfReset">Сбросить фильтры</button>':''}</div>
+  <div class="card"><div class="kv">
+   ${row('Внесено',money(inV),'',all||inV)}${row('Выведено продажами',money(outV),'',all||outV)}${row('Чистые вложения',money(inV-outV),'',all||inV||outV)}
+   ${row('Доход (лендинг, опционы, боты)',money(incV),'up',all||incV)}${row('Зафиксированная прибыль',money(realV,{sign:true}),cls(realV),all||realV)}
+   ${A_?`${row(`Пришло ${esc(A_)}${HF.loc?' на '+esc(locName(p,HF.loc)):''}`,qfmt(qIn,A_)+' '+esc(A_),'',true)}${row(`Ушло ${esc(A_)}`,qfmt(qOut,A_)+' '+esc(A_),'',true)}${row(`Сейчас ${esc(A_)}${HF.loc?' на '+esc(locName(p,HF.loc)):''}`,`${qfmt(nowQ,A_)} ${esc(A_)} (${money(nowV)})`,'',true)}`:''}
+   ${!all&&!inV&&!outV&&!incV&&!realV&&!A_?`<span class="muted">Сумма по этим операциям</span><span class="v">${money(list.reduce((a,t)=>a+num(t.value),0))}</span>`:''}
+  </div>${A_&&!HF.year&&all?'<p class="small muted" style="margin:8px 0 0">«Пришло» – покупки, доход, обмены в актив, займы и переводы на площадку. «Ушло» – продажи, обмены из актива, погашения и переводы с площадки.</p>':''}</div>`;
   // по месяцам
   const months={};base.forEach(t=>{if(t.type!=='buy'&&t.type!=='sell')return;const m=months[ymd(t.date)]=months[ymd(t.date)]||{in:0,out:0};if(t.type==='buy')m.in+=num(t.value);else m.out+=num(t.value)});
   const mk=Object.keys(months).sort();let cum=0;const mrows=mk.map(k=>{cum+=months[k].in-months[k].out;return{k,...months[k],cum}}).reverse();
@@ -1066,6 +1085,7 @@ function loadDemo(){
 
 /* ===================== события ===================== */
 const A={
+  hfReset:()=>{HF={type:'all',asset:'',loc:'',year:''};render()},
   avgDeals:d=>openSheet(`${d.k}: сделки и средняя цена`,avgDealsHtml(P(),d.k)),
   fxAuto:()=>{const c=S.settings.currency;if(S.settings.fxManual)delete S.settings.fxManual[c];save({silent:true});openSettings();toast('Загружаю курс…');refreshFx().then(ok=>{if(!$('#sheet').hidden)openSettings();toast(ok?'Курс обновлён':'Не удалось загрузить курс')})},
   asub:d=>{ASUB=d.k;render()},
@@ -1146,7 +1166,7 @@ const A={
     if(!await ask(n?`Удалить тип «${k}»? ${n} пл. получат тип «${fb}».`:`Удалить тип «${k}»?`,'Удалить'))return A.locations();
     S.locKinds.splice(i,1);if(!S.locKinds.includes(fb))S.locKinds.push(fb);S.portfolios.forEach(x=>x.locations.forEach(l=>{if(l.kind===k)l.kind=fb}));save({silent:true});A.locations();toast('Тип удалён')},
   delLoc:d=>{const p=P();if(p.txs.some(t=>t.loc===d.k||t.toLoc===d.k))return toast('На площадке есть операции – сначала удалите их');if((p.loans||[]).some(l=>l.loc===d.k))return toast('Площадка используется в займе');p.locations=p.locations.filter(l=>l.id!==d.k);save({silent:true});A.locations()},
-  pick:d=>{S.activeId=d.k;save()},
+  pick:d=>{S.activeId=d.k;HF={type:'all',asset:'',loc:'',year:''};save()},
   newClient:()=>openSheet('Новый клиент',`<div class="field"><label>Имя</label><input class="inp" id="ncName" placeholder="Имя клиента"></div><div class="field"><label>Контакт</label><input class="inp" id="ncContact" placeholder="@username"></div><div class="btns"><button class="btn primary" data-a="createClient">Добавить и пройти опросник</button></div>`),
   createClient:()=>{const n=$('#ncName').value.trim();if(!n)return toast('Введите имя');const p=newPortfolio(n,false);p.contact=$('#ncContact').value.trim();S.portfolios.push(p);S.activeId=p.id;closeSheet();save({silent:true});startWizard()},
   delClient:async()=>{const p=P();if(p.owner||!await ask(`Удалить клиента «${p.name}» и все его данные?`))return;S.portfolios=S.portfolios.filter(x=>x.id!==p.id);S.activeId='me';save();toast('Клиент удалён')},
@@ -1211,7 +1231,7 @@ function copy(t){(navigator.clipboard?navigator.clipboard.writeText(t):Promise.r
 
 document.addEventListener('click',e=>{const el=e.target.closest('[data-a]');if(!el||el.disabled)return;e.preventDefault();const f=A[el.dataset.a];if(f)f(el.dataset,el)});
 $('#sheet').addEventListener('click',e=>{if(e.target.id==='sheet')A.closeSheet()});
-$('#pfSel').addEventListener('change',e=>{if(e.target.value==='__new'){render();A.newClient()}else{S.activeId=e.target.value;W=null;save()}});
+$('#pfSel').addEventListener('change',e=>{if(e.target.value==='__new'){render();A.newClient()}else{S.activeId=e.target.value;W=null;HF={type:'all',asset:'',loc:'',year:''};save()}});
 document.addEventListener('change',e=>{
   const el=e.target;const p=P();
   if(el.dataset.w!==undefined){W.d[el.dataset.w]=num(el.value);render();return}
