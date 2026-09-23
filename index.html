@@ -144,8 +144,9 @@ table.t td.n,table.t th.n{text-align:right;white-space:nowrap}
 
 <script>
 /* ===================== версия ===================== */
-const APP_VERSION='1.5.3';
+const APP_VERSION='1.5.4';
 const CHANGELOG=[
+ {v:'1.5.4',d:'23.09.2026',items:['В «Истории» при выборе площадки итоги считаются по этой площадке: что куплено на ней, что пришло переводами с других площадок, что продано и выведено','Для площадки видно, сколько на ней сейчас и какой на ней результат','«Взносы по месяцам» и «Куда вложено» для площадки тоже учитывают переводы']},
  {v:'1.5.3',d:'23.09.2026',items:['Фильтры в «Истории» теперь меняют всё: итоги, взносы по месяцам, «Куда вложено» и хронологию','При выборе актива видно, сколько штук пришло, ушло и сколько осталось на выбранной площадке','Показано число найденных операций и кнопка «Сбросить фильтры»','Фильтры сбрасываются при переключении на другого клиента']},
  {v:'1.5.2',d:'23.09.2026',items:['Исправлено: в обмене стейблкоина на монету сумма сделки бралась по текущему курсу, а не по отданным USDT. Теперь цена сделки считается по стейблкоину, старые обмены пересчитаны','Подсказка о средней цене переписана понятнее и предупреждает, если цена сделки подозрительно отличается от рыночной','В «Средних ценах» можно открыть актив и увидеть все сделки, из которых сложилась средняя, с подсветкой подозрительных']},
  {v:'1.5.1',d:'23.09.2026',items:['Курс валюты учёта теперь подтягивается для всех валют, включая BYN','Курсы валют берутся из банковских источников и обновляются вместе с курсами монет','Курс валюты можно задать вручную и потом вернуть автообновление']},
@@ -258,7 +259,7 @@ function ledger(p,prices,until){
     else if(t.type==='swap'){const c=rm(t.asset,t.loc,num(t.qty));add(t.toAsset,t.toLoc||t.loc,num(t.toQty),v);realized+=v-c;info[t.id]={cost:c,realized:v-c}}
     else if(t.type==='borrow'){add(t.asset,t.loc,num(t.qty),v)}
     else if(t.type==='repay'){rm(t.asset,t.loc,num(t.qty))}
-    else if(t.type==='transfer'){const c=rm(t.asset,t.loc,num(t.qty));add(t.asset,t.toLoc,num(t.qty)-num(t.fee),c)}
+    else if(t.type==='transfer'){const c=rm(t.asset,t.loc,num(t.qty));add(t.asset,t.toLoc,num(t.qty)-num(t.fee),c);info[t.id]={cost:c}}
     else if(t.type==='revalue'){const k=key(t.asset,t.loc);const x=pos[k]||(pos[k]={asset:t.asset,loc:t.loc,qty:0,cost:0});x.qty=num(t.value)}
   }
   let value=0,missing=[];
@@ -641,7 +642,7 @@ const monthTitle=ym=>{const s=new Date(ym+'-15').toLocaleDateString('ru-RU',{mon
 function txRow(p,t,L){
   const inf=L.info[t.id];
   const val=t.type==='transfer'?'':t.type==='revalue'?usd(num(t.value)):`<span class="${t.type==='sell'?'down':t.type==='income'?'up':''}">${t.type==='sell'?'−':t.type==='buy'?'+':''}${usd(num(t.value))}</span>`;
-  const rl=inf?`<div class="small ${cls(inf.realized)}">${inf.realized>=0?'прибыль':'убыток'} ${money(inf.realized,{sign:true})}${inf.cost>0?' ('+pct(inf.realized/inf.cost,{sign:true})+')':''}</div>`:'';
+  const rl=inf&&inf.realized!=null?`<div class="small ${cls(inf.realized)}">${inf.realized>=0?'прибыль':'убыток'} ${money(inf.realized,{sign:true})}${inf.cost>0?' ('+pct(inf.realized/inf.cost,{sign:true})+')':''}</div>`:'';
   return`<button class="row btnrow" data-a="editTx" data-k="${t.id}"><div class="grow"><div><b>${txLabel(t.type)}</b> <span class="muted small">${new Date(t.date).toLocaleDateString('ru-RU')}</span></div><div class="small muted">${txLine(p,t)}</div></div><div class="r">${val}${rl}</div></button>`;
 }
 function vHistory(p,L){
@@ -664,23 +665,43 @@ function vHistory(p,L){
   const nowV=A_?L.pos.filter(x=>x.asset===A_&&lm(x.loc)).reduce((a,x)=>a+x.value,0):0;
   const row=(label,val,c,show)=>show?`<span>${label}</span><span class="v ${c||''}">${val}</span>`:'';
   const all=HF.type==='all';
+  const LOC=HF.loc;
+  const flow=t=>{const v=num(t.value);
+    if(!LOC){if(t.type==='buy')return{i:v,o:0,k:'buy'};if(t.type==='sell')return{i:0,o:v,k:'sell'};return null}
+    const at=t.loc===LOC,to=(t.toLoc||t.loc)===LOC;
+    if(t.type==='buy'&&at)return{i:v,o:0,k:'buy'};
+    if(t.type==='sell'&&at)return{i:0,o:v,k:'sell'};
+    if(t.type==='transfer'&&at!==to){const c=(L.info[t.id]||{}).cost||0;return at?{i:0,o:c,k:'tout'}:{i:c,o:0,k:'tin'}}
+    if(t.type==='swap'&&at!==to)return at?{i:0,o:v,k:'tout'}:{i:v,o:0,k:'tin'};
+    return null};
+  const F={buy:0,sell:0,tin:0,tout:0};list.forEach(t=>{const f=flow(t);if(f)F[f.k]+=f.i+f.o});
+  const locInc=LOC?list.filter(t=>t.type==='income'&&t.loc===LOC).reduce((a,t)=>a+num(t.value),0):0;
+  const locReal=LOC?list.filter(t=>t.loc===LOC).reduce((a,t)=>a+((L.info[t.id]||{}).realized||0),0):0;
+  const locBor=LOC?list.filter(t=>t.loc===LOC).reduce((a,t)=>a+(t.type==='borrow'?num(t.value):t.type==='repay'?-num(t.value):0),0):0;
+  const locNet=F.buy+F.tin-F.sell-F.tout;
+  const locNow=LOC?L.pos.filter(x=>x.loc===LOC&&(!HF.asset||x.asset===HF.asset)).reduce((a,x)=>a+x.value,0):0;
+  const locRes=locNow-locNet-locBor;
+  const LN=LOC?esc(locName(p,LOC)):'';
   let h=`<div class="grid2" style="margin-top:14px"><div class="field"><label>Операции</label><select class="inp" data-hf="type">${Object.entries(HTYPES).map(([k,v])=>`<option value="${k}" ${k===HF.type?'selected':''}>${v}</option>`).join('')}</select></div>
   <div class="field"><label>Год</label><select class="inp" data-hf="year"><option value="">Всё время</option>${years.map(y=>`<option ${y===HF.year?'selected':''}>${y}</option>`).join('')}</select></div>
   <div class="field"><label>Актив</label><select class="inp" data-hf="asset"><option value="">Все активы</option>${assetsUsed.map(a=>`<option value="${esc(a)}" ${a===HF.asset?'selected':''}>${esc(a)}</option>`).join('')}</select></div>
   <div class="field"><label>Площадка</label><select class="inp" data-hf="loc"><option value="">Все площадки</option>${p.locations.map(l=>`<option value="${l.id}" ${l.id===HF.loc?'selected':''}>${esc(l.name)}</option>`).join('')}</select></div></div>
   <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin:-2px 0 10px"><span class="small muted">Найдено операций: <b>${list.length}</b></span>${active?'<button class="btn sm" data-a="hfReset">Сбросить фильтры</button>':''}</div>
   <div class="card"><div class="kv">
-   ${row('Внесено',money(inV),'',all||inV)}${row('Выведено продажами',money(outV),'',all||outV)}${row('Чистые вложения',money(inV-outV),'',all||inV||outV)}
-   ${row('Доход (лендинг, опционы, боты)',money(incV),'up',all||incV)}${row('Зафиксированная прибыль',money(realV,{sign:true}),cls(realV),all||realV)}
+   ${LOC?`${row('Куплено на площадке',money(F.buy),'',all||F.buy)}${row('Пришло переводами с других площадок',money(F.tin),'',all||F.tin)}${row('Продано на площадке',money(F.sell),'',all||F.sell)}${row('Ушло переводами на другие площадки',money(F.tout),'',all||F.tout)}${row('<b>Чистые вложения в '+LN+'</b>','<b>'+money(locNet)+'</b>','',all||locNet)}
+   ${row('Доход на площадке',money(locInc),'up',all||locInc)}${row('Зафиксированная прибыль',money(locReal,{sign:true}),cls(locReal),all||locReal)}${row('Займы: получено минус погашено',money(locBor),'',!!locBor)}
+   ${all&&!HF.year?`${row('Сейчас на '+LN,'<b>'+money(locNow)+'</b>','',true)}${row('Результат на площадке',`${money(locRes,{sign:true})}${locNet>0?' ('+pct(locRes/locNet,{sign:true})+')':''}`,cls(locRes),true)}`:''}`:
+   `${row('Внесено',money(inV),'',all||inV)}${row('Выведено продажами',money(outV),'',all||outV)}${row('Чистые вложения',money(inV-outV),'',all||inV||outV)}
+   ${row('Доход (лендинг, опционы, боты)',money(incV),'up',all||incV)}${row('Зафиксированная прибыль',money(realV,{sign:true}),cls(realV),all||realV)}`}
    ${A_?`${row(`Пришло ${esc(A_)}${HF.loc?' на '+esc(locName(p,HF.loc)):''}`,qfmt(qIn,A_)+' '+esc(A_),'',true)}${row(`Ушло ${esc(A_)}`,qfmt(qOut,A_)+' '+esc(A_),'',true)}${row(`Сейчас ${esc(A_)}${HF.loc?' на '+esc(locName(p,HF.loc)):''}`,`${qfmt(nowQ,A_)} ${esc(A_)} (${money(nowV)})`,'',true)}`:''}
-   ${!all&&!inV&&!outV&&!incV&&!realV&&!A_?`<span class="muted">Сумма по этим операциям</span><span class="v">${money(list.reduce((a,t)=>a+num(t.value),0))}</span>`:''}
-  </div>${A_&&!HF.year&&all?'<p class="small muted" style="margin:8px 0 0">«Пришло» – покупки, доход, обмены в актив, займы и переводы на площадку. «Ушло» – продажи, обмены из актива, погашения и переводы с площадки.</p>':''}</div>`;
+   ${!all&&!inV&&!outV&&!incV&&!realV&&!A_&&!(LOC&&(F.buy||F.tin||F.sell||F.tout||locInc||locReal))?`<span class="muted">Сумма по этим операциям</span><span class="v">${money(list.reduce((a,t)=>a+num(t.value),0))}</span>`:''}
+  </div>${LOC?'<p class="small muted" style="margin:8px 0 0">Переводы между площадками оцениваются по цене покупки переведённого актива. «Результат на площадке» = сколько там сейчас минус чистые вложения в неё.</p>':''}${A_&&!HF.year&&all?'<p class="small muted" style="margin:8px 0 0">«Пришло» – покупки, доход, обмены в актив, займы и переводы на площадку. «Ушло» – продажи, обмены из актива, погашения и переводы с площадки.</p>':''}</div>`;
   // по месяцам
-  const months={};base.forEach(t=>{if(t.type!=='buy'&&t.type!=='sell')return;const m=months[ymd(t.date)]=months[ymd(t.date)]||{in:0,out:0};if(t.type==='buy')m.in+=num(t.value);else m.out+=num(t.value)});
+  const months={};base.forEach(t=>{const f=flow(t);if(!f)return;const m=months[ymd(t.date)]=months[ymd(t.date)]||{in:0,out:0};m.in+=f.i;m.out+=f.o});
   const mk=Object.keys(months).sort();let cum=0;const mrows=mk.map(k=>{cum+=months[k].in-months[k].out;return{k,...months[k],cum}}).reverse();
-  if(mrows.length)h+=`<h2>Взносы по месяцам</h2><div class="card scroll"><table class="t"><thead><tr><th>Месяц</th><th class="n">Внесено</th><th class="n">Выведено</th><th class="n">Итого вложено</th></tr></thead><tbody>${mrows.map(r=>`<tr><td>${monthTitle(r.k)}</td><td class="n">${r.in?money(r.in):'–'}</td><td class="n">${r.out?money(r.out):'–'}</td><td class="n"><b>${money(r.cum)}</b></td></tr>`).join('')}</tbody></table></div>`;
+  if(mrows.length)h+=`<h2>${LOC?'Движение по '+LN+' по месяцам':'Взносы по месяцам'}</h2><div class="card scroll"><table class="t"><thead><tr><th>Месяц</th><th class="n">${LOC?'Пришло':'Внесено'}</th><th class="n">${LOC?'Ушло':'Выведено'}</th><th class="n">Итого вложено</th></tr></thead><tbody>${mrows.map(r=>`<tr><td>${monthTitle(r.k)}</td><td class="n">${r.in?money(r.in):'–'}</td><td class="n">${r.out?money(r.out):'–'}</td><td class="n"><b>${money(r.cum)}</b></td></tr>`).join('')}</tbody></table></div>`;
   // куда вложено
-  const al={};base.forEach(t=>{if(t.type!=='buy'&&t.type!=='sell')return;const k=t.asset+'|'+t.loc;const r=al[k]=al[k]||{asset:t.asset,loc:t.loc,in:0,out:0,now:0};if(t.type==='buy')r.in+=num(t.value);else r.out+=num(t.value)});
+  const al={};base.forEach(t=>{const f=flow(t);if(!f)return;const a=(t.type==='swap'&&f.i)?t.toAsset:t.asset;if(HF.asset&&a!==HF.asset)return;const lc=LOC||t.loc;const k=a+'|'+lc;const r=al[k]=al[k]||{asset:a,loc:lc,in:0,out:0,now:0};r.in+=f.i;r.out+=f.o});
   L.pos.forEach(x=>{const k=x.asset+'|'+x.loc;if(al[k])al[k].now=x.value});
   const arows=Object.values(al).sort((a,b)=>b.in-a.in);
   if(arows.length)h+=`<h2>Куда вложено</h2><div class="card scroll"><table class="t"><thead><tr><th>Актив и площадка</th><th class="n">Внесено</th><th class="n">Выведено</th><th class="n">Сейчас</th></tr></thead><tbody>${arows.map(r=>`<tr><td><b>${esc(r.asset)}</b><div class="small muted">${esc(locName(p,r.loc))}</div></td><td class="n">${money(r.in)}</td><td class="n">${r.out?money(r.out):'–'}</td><td class="n">${money(r.now)}</td></tr>`).join('')}</tbody></table><p class="small muted" style="margin:8px 0 0">«Сейчас» – текущая стоимость на этой площадке, с учётом обменов и переводов.</p></div>`;
