@@ -1,0 +1,793 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Капитал — учёт инвестиций</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&family=Unbounded:wght@500;600;700&display=swap" rel="stylesheet">
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+:root{
+  --bg:#ECEFEA;--surface:#FAFBF8;--sunk:#E1E6DF;--ink:#14221D;--muted:#5A6862;--line:#CDD5CE;
+  --gold:#A96D14;--gold-soft:#EFDDBB;--teal:#1F7266;--teal-soft:#C9E3DD;--up:#277547;--down:#AE3A32;
+  --f:'Onest',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  --fd:'Unbounded','Onest',system-ui,sans-serif;
+  box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0F1916;--surface:#16221E;--sunk:#1D2B26;--ink:#E4ECE6;--muted:#8FA098;--line:#2A3A34;
+  --gold:#E2A640;--gold-soft:#3B2F19;--teal:#52B5A5;--teal-soft:#183A34;--up:#5DC48B;--down:#E7786E;color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0F1916;--surface:#16221E;--sunk:#1D2B26;--ink:#E4ECE6;--muted:#8FA098;--line:#2A3A34;
+  --gold:#E2A640;--gold-soft:#3B2F19;--teal:#52B5A5;--teal-soft:#183A34;--up:#5DC48B;--down:#E7786E;color-scheme:dark}
+*,*::before,*::after{box-sizing:inherit}
+html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;min-height:100%;background:var(--bg);color:var(--ink);font:15px/1.45 var(--f);-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.app{max-width:640px;margin:0 auto;padding:0 16px 96px}
+header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);display:flex;gap:10px;align-items:center;padding:12px 0 10px;border-bottom:1px solid var(--line)}
+.pf-select{flex:1;min-width:0;appearance:none;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:9px 34px 9px 12px;font-weight:600;background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);background-position:calc(100% - 17px) 55%,calc(100% - 12px) 55%;background-size:5px 5px;background-repeat:no-repeat}
+.icon-btn{border:1px solid var(--line);background:var(--surface);border-radius:10px;width:40px;height:40px;display:grid;place-items:center;cursor:pointer}
+nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:6;background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px)}
+nav.tabs .in{max-width:640px;margin:0 auto;display:grid;grid-template-columns:repeat(5,1fr)}
+nav.tabs button{border:0;background:none;padding:10px 2px 12px;font-size:12px;color:var(--muted);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px}
+nav.tabs button svg{width:22px;height:22px}
+nav.tabs button[aria-current="true"]{color:var(--ink);font-weight:600}
+nav.tabs button[aria-current="true"] svg{color:var(--gold)}
+h1,h2,h3{margin:0;font-weight:600}
+h2{font-size:17px;margin:28px 0 10px}
+h3{font-size:15px}
+.muted{color:var(--muted)}
+.small{font-size:13px}
+.up{color:var(--up)}.down{color:var(--down)}
+.hero{padding:22px 0 6px}
+.hero .who{color:var(--muted);font-size:14px}
+.hero .big{font-family:var(--fd);font-weight:600;font-size:clamp(30px,9vw,44px);letter-spacing:-.02em;line-height:1.1;margin:6px 0 8px;overflow-wrap:anywhere}
+.hero .pl{display:flex;gap:14px;flex-wrap:wrap;font-size:14px}
+.zonebar{margin:20px 0 4px}
+.zonebar .bar{position:relative;display:flex;height:34px;border-radius:8px;overflow:hidden;background:var(--sunk)}
+.zonebar .g{background:var(--gold)}.zonebar .s{background:var(--teal)}
+.zonebar .tick{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--ink)}
+.zonebar .legend{display:flex;justify-content:space-between;margin-top:8px;font-size:13px;gap:10px}
+.zonebar .legend b{font-weight:600}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:1px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.tile .sym{font-weight:700}
+.tile .q{font-family:var(--fd);font-size:17px;font-weight:500;margin:6px 0 2px;overflow-wrap:anywhere}
+.list{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.row{display:flex;align-items:center;gap:12px;padding:12px 14px;border-top:1px solid var(--line)}
+.row:first-child{border-top:0}
+.row .grow{flex:1;min-width:0}
+.row .r{text-align:right;white-space:nowrap}
+.row.btnrow{cursor:pointer;width:100%;border-left:0;border-right:0;border-bottom:0;background:none;text-align:left}
+.share{height:4px;border-radius:2px;background:var(--sunk);margin-top:6px;overflow:hidden}
+.share i{display:block;height:100%;background:var(--ink);opacity:.55}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:10px 14px;font-weight:600;cursor:pointer;text-decoration:none}
+.btn.primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.btn.gold{background:var(--gold);color:#fff;border-color:var(--gold)}
+.btn.danger{color:var(--down)}
+.btn.block{width:100%}
+.btn.sm{padding:6px 10px;font-size:13px;border-radius:8px}
+.btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px}
+.kv{display:grid;grid-template-columns:1fr auto;gap:8px 12px;align-items:baseline}
+.kv .v{text-align:right;font-weight:600}
+.callout{border-left:3px solid var(--gold);background:var(--gold-soft);padding:12px 14px;border-radius:0 10px 10px 0;margin:12px 0}
+.callout.teal{border-color:var(--teal);background:var(--teal-soft)}
+.field{display:flex;flex-direction:column;gap:5px;margin-bottom:12px}
+.field label,.lbl{font-size:13px;color:var(--muted)}
+.inp,select.inp,textarea.inp{width:100%;border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:10px 12px;min-height:42px}
+textarea.inp{min-height:120px;font-size:12px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.seg{display:flex;flex-wrap:wrap;gap:8px}
+.opt{flex:1 1 150px;text-align:left;border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:12px 14px;cursor:pointer}
+.opt[aria-pressed="true"]{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
+.opt b{display:block;margin-bottom:3px}
+.opt .small{color:var(--muted)}
+.steps{display:flex;gap:6px;margin:18px 0 6px}
+.steps i{flex:1;height:4px;border-radius:2px;background:var(--sunk)}
+.steps i.on{background:var(--gold)}
+.q{margin:18px 0 8px;font-weight:600}
+table.t{width:100%;border-collapse:collapse;font-size:14px}
+table.t th{text-align:left;font-weight:500;color:var(--muted);font-size:13px;padding:8px 6px;border-bottom:1px solid var(--line)}
+table.t td{padding:9px 6px;border-bottom:1px solid var(--line)}
+table.t td.n,table.t th.n{text-align:right;white-space:nowrap}
+.scroll{overflow-x:auto}
+.kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.kpi .n{font-family:var(--fd);font-size:20px;font-weight:500;margin:4px 0}
+.kpi .h{font-size:12px;color:var(--muted);line-height:1.35}
+.kpi .tag{font-size:12px;font-weight:600}
+.chart{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px}
+.chart svg{display:block;width:100%;height:auto}
+.empty{text-align:center;padding:36px 16px}
+.empty .big{font-family:var(--fd);font-size:22px;margin-bottom:8px}
+.pill{display:inline-block;font-size:12px;padding:2px 8px;border-radius:20px;background:var(--sunk);color:var(--muted)}
+.sheet{position:fixed;inset:0;z-index:20;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center}
+.sheet[hidden]{display:none}
+.sheet-card{background:var(--surface);width:100%;max-width:640px;max-height:92%;overflow:auto;border-radius:18px 18px 0 0;padding:18px 16px calc(20px + env(safe-area-inset-bottom,0px))}
+.sheet-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:10px}
+.sheet-head h3{font-size:17px}
+.toast{position:fixed;left:50%;bottom:calc(84px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:14px;z-index:30;max-width:90%}
+.toast[hidden]{display:none}
+@media (prefers-reduced-motion:no-preference){.sheet-card{animation:up .22s ease-out}@keyframes up{from{transform:translateY(24px);opacity:.6}to{transform:none;opacity:1}}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <select class="pf-select" id="pfSel" aria-label="Портфель"></select>
+    <button class="icon-btn" data-a="settings" aria-label="Настройки"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
+  </header>
+  <main id="view"></main>
+</div>
+<nav class="tabs"><div class="in" id="tabs"></div></nav>
+<div class="sheet" id="sheet" hidden><div class="sheet-card" role="dialog" aria-modal="true"><div id="sheetBody"></div></div></div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+/* ===================== базовые утилиты ===================== */
+const $=s=>document.querySelector(s);
+const tg=window.Telegram&&window.Telegram.WebApp;
+const inTG=!!(tg&&tg.initData);
+const uid=()=>Math.random().toString(36).slice(2,10);
+const today=()=>new Date().toISOString().slice(0,10);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const num=v=>{const n=parseFloat(String(v??'').replace(/\s/g,'').replace(',','.'));return isFinite(n)?n:0};
+const r2=n=>Math.round(n*100)/100;
+const haptic=t=>{try{tg&&tg.HapticFeedback&&tg.HapticFeedback.notificationOccurred(t||'success')}catch(e){}};
+
+const CUR={USD:{sym:'$',pre:1,cg:'usd'},EUR:{sym:'€',pre:1,cg:'eur'},RUB:{sym:'₽',pre:0,cg:'rub'},BYN:{sym:'Br',pre:0,cg:null},UAH:{sym:'₴',pre:0,cg:'uah'},KZT:{sym:'₸',pre:0,cg:'kzt'},PLN:{sym:'zł',pre:0,cg:'pln'},GBP:{sym:'£',pre:1,cg:'gbp'}};
+const LOC_KINDS=['Криптобиржа','Кошелёк','DeFi-протокол','Лендинг','Опционы','Торговый бот','Стейкинг','Другое'];
+const TX_TYPES={buy:'Покупка / пополнение',sell:'Продажа / вывод',swap:'Обмен',income:'Доход',transfer:'Перевод между площадками'};
+const MODELS={growth:{t:'Рост капитала',d:'Всё реинвестируется, цель — увеличить капитал до нужного размера.'},cashflow:{t:'Cashflow',d:'Капитал уже работает на ежемесячный вывод в реальную жизнь.'},hybrid:{t:'Гибрид',d:'Капитал растёт, а часть дохода выводится в жизнь.'}};
+const PROFILES={conservative:{t:'Консервативный',a:{BTC:20,ETH:5,STABLES:75}},moderate:{t:'Умеренный',a:{BTC:40,ETH:10,STABLES:50}},aggressive:{t:'Агрессивный',a:{BTC:55,ETH:20,STABLES:25}}};
+const RISK_Q=[
+ {q:'Горизонт инвестиций',o:['До 1 года','1–3 года','3–5 лет','Больше 5 лет']},
+ {q:'Портфель за месяц упал на 40%. Что сделаете?',o:['Продам всё','Продам часть','Ничего, подожду','Докуплю на просадке']},
+ {q:'Опыт в криптовалюте',o:['Нет опыта','До года','1–3 года','Больше 3 лет, пережил медвежий рынок']},
+ {q:'Какая доля всех сбережений в этом капитале?',o:['Больше 75%','50–75%','25–50%','Меньше 25%']},
+ {q:'Что для вас важнее?',o:['Сохранить капитал','Стабильный доход','Баланс роста и дохода','Максимальный рост']}
+];
+const DEFAULT_ASSETS={
+ BTC:{name:'Bitcoin',cg:'bitcoin',stable:false},ETH:{name:'Ethereum',cg:'ethereum',stable:false},
+ USDT:{name:'Tether',cg:'tether',stable:true},USDC:{name:'USD Coin',cg:'usd-coin',stable:true},
+ SOL:{name:'Solana',cg:'solana',stable:false},BNB:{name:'BNB',cg:'binancecoin',stable:false},TON:{name:'Toncoin',cg:'the-open-network',stable:false}
+};
+
+function newPortfolio(name,owner){return{id:owner?'me':uid(),name,owner:!!owner,contact:'',note:'',createdAt:today(),plan:null,
+  fees:{tiers:[{from:0,mgmt:3,perf:30},{from:100000,mgmt:2,perf:20}],annual:true,mode:'flat',hwm:true},
+  hwm:null,locations:[],txs:[],snaps:[],feeRecs:[]}}
+function defaultState(){return{v:1,savedAt:0,settings:{currency:'USD',fx:{USD:1},consRate:10,targetRate:15,riskFree:4},
+  assets:JSON.parse(JSON.stringify(DEFAULT_ASSETS)),prices:{USDT:1,USDC:1},chg:{},pricesAt:null,pricesSrc:'manual',
+  portfolios:[newPortfolio('Мой портфель',true)],activeId:'me'}}
+
+let S=defaultState();
+let TAB='home';
+let W=null; // мастер стратегии
+let OPEN_ASSET=null;
+
+/* ===================== хранение ===================== */
+const LS_KEY='kapital.v1';
+let dbRef=null,dbTimer=null;
+function loadLocal(){try{const j=localStorage.getItem(LS_KEY);if(j)return JSON.parse(j)}catch(e){}return null}
+function migrate(s){const d=defaultState();s.settings={...d.settings,...(s.settings||{})};s.assets={...d.assets,...(s.assets||{})};s.prices={...d.prices,...(s.prices||{})};s.chg=s.chg||{};
+  (s.portfolios||[]).forEach(p=>{const n=newPortfolio(p.name,p.owner);for(const k in n)if(p[k]===undefined)p[k]=n[k]});
+  if(!s.portfolios||!s.portfolios.length)s.portfolios=d.portfolios;if(!s.portfolios.find(p=>p.id===s.activeId))s.activeId=s.portfolios[0].id;return s}
+function save(opts){
+  S.portfolios.forEach(snapshot);
+  S.savedAt=Date.now();
+  try{localStorage.setItem(LS_KEY,JSON.stringify(S))}catch(e){}
+  if(dbRef){clearTimeout(dbTimer);dbTimer=setTimeout(()=>{dbRef.doc('workspace/main').set({json:JSON.stringify(S),savedAt:S.savedAt}).catch(()=>{})},600)}
+  if(!opts||!opts.silent)render();
+}
+async function initCloud(){
+  try{
+    if(!window.claude||!window.claude.use)return;
+    const db=await window.claude.use('db');if(!db)return;
+    dbRef=db;
+    const snap=await db.doc('workspace/main').get();
+    if(snap.exists){const d=snap.data();if(d&&d.json&&(d.savedAt||0)>(S.savedAt||0)){S=migrate(JSON.parse(d.json));render()}}
+    else if(S.savedAt){save({silent:true})}
+  }catch(e){}
+}
+
+/* ===================== форматирование ===================== */
+const nf=d=>new Intl.NumberFormat('ru-RU',{minimumFractionDigits:d,maximumFractionDigits:d});
+const cur=()=>S.settings.currency;
+const rate=()=>S.settings.fx[cur()]||1;
+function money(usd,o={}){if(usd==null||!isFinite(usd))return'—';let v=usd*rate();if(Math.abs(v)<0.005)v=0;const d=o.dec??(Math.abs(v)>=1000?0:2);const s=nf(d).format(Math.abs(v));const c=CUR[cur()]||CUR.USD;const pre=v<0?'−':(o.sign&&v>0?'+':'');return pre+(c.pre?c.sym+s:s+' '+c.sym)}
+function usd(v,dec){return'$'+nf(dec??(Math.abs(v)>=1000?0:2)).format(v)}
+function pct(x,o={}){if(x==null||!isFinite(x))return'—';const pre=x<0?'−':(o.sign&&x>0?'+':'');return pre+nf(o.dec??1).format(Math.abs(x*100))+'%'}
+function qfmt(q,a){const st=S.assets[a]&&S.assets[a].stable;const d=st?2:(Math.abs(q)<10?6:3);return new Intl.NumberFormat('ru-RU',{maximumFractionDigits:d}).format(q)}
+const cls=x=>x>0.004?'up':x<-0.004?'down':'';
+const P=()=>S.portfolios.find(p=>p.id===S.activeId)||S.portfolios[0];
+const ymd=d=>d.slice(0,7);
+
+/* ===================== учёт: позиции и P&L ===================== */
+function ledger(p,prices,until){
+  const pos={};let inflow=0,outflow=0,income=0,realized=0;
+  const key=(a,l)=>a+'|'+l;
+  const add=(a,l,q,c)=>{const k=key(a,l);pos[k]=pos[k]||{asset:a,loc:l,qty:0,cost:0};pos[k].qty+=q;pos[k].cost+=c};
+  const rm=(a,l,q)=>{const k=key(a,l);const x=pos[k]||(pos[k]={asset:a,loc:l,qty:0,cost:0});const ratio=x.qty>0?Math.min(1,q/x.qty):0;const c=x.cost*ratio;x.qty-=q;x.cost-=c;return c};
+  const txs=p.txs.filter(t=>!until||t.date<=until).slice().sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:0);
+  for(const t of txs){
+    const v=num(t.value);
+    if(t.type==='buy'){add(t.asset,t.loc,num(t.qty),v);inflow+=v}
+    else if(t.type==='income'){add(t.asset,t.loc,num(t.qty),v);income+=v}
+    else if(t.type==='sell'){const c=rm(t.asset,t.loc,num(t.qty));realized+=v-c;outflow+=v}
+    else if(t.type==='swap'){const c=rm(t.asset,t.loc,num(t.qty));add(t.toAsset,t.toLoc||t.loc,num(t.toQty),v);realized+=v-c}
+    else if(t.type==='transfer'){const c=rm(t.asset,t.loc,num(t.qty));add(t.asset,t.toLoc,num(t.qty)-num(t.fee),c)}
+  }
+  let value=0,missing=[];
+  const list=Object.values(pos).filter(x=>Math.abs(x.qty)>1e-12).map(x=>{const pr=prices[x.asset];if(!pr)missing.push(x.asset);const val=x.qty*(pr||0);value+=val;return{...x,price:pr||0,value:val,pnl:val-x.cost}});
+  return{pos:list,inflow,outflow,income,realized,value,net:inflow-outflow,pnl:value+outflow-inflow,missing:[...new Set(missing)]};
+}
+function byAsset(L){const m={};L.pos.forEach(x=>{const a=m[x.asset]=m[x.asset]||{asset:x.asset,qty:0,value:0,cost:0,locs:[]};a.qty+=x.qty;a.value+=x.value;a.cost+=x.cost;a.locs.push(x)});return Object.values(m).sort((a,b)=>b.value-a.value)}
+function byLoc(p,L){const m={};L.pos.forEach(x=>{const l=m[x.loc]=m[x.loc]||{loc:x.loc,value:0,items:[]};l.value+=x.value;l.items.push(x)});return Object.values(m).sort((a,b)=>b.value-a.value)}
+const locName=(p,id)=>{const l=p.locations.find(l=>l.id===id);return l?l.name:'Без площадки'};
+const locKind=(p,id)=>{const l=p.locations.find(l=>l.id===id);return l?l.kind:''};
+function zones(L){let g=0,s=0;L.pos.forEach(x=>{if(S.assets[x.asset]&&S.assets[x.asset].stable)s+=x.value;else g+=x.value});return{g,s,t:g+s}}
+function allocKey(plan,asset){if(plan&&plan.alloc.some(a=>a.k===asset))return asset;if(S.assets[asset]&&S.assets[asset].stable)return'STABLES';return plan?'OTHER':asset}
+const keyName=k=>k==='STABLES'?'USDT/USDC':k==='OTHER'?'Прочее':k;
+
+/* ===================== история и метрики ===================== */
+function snapshot(p){
+  const L=ledger(p,S.prices);
+  if(L.missing.length||(L.value<=0&&!p.snaps.length))return;
+  const e={d:today(),v:r2(L.value),f:r2(L.net),b:S.prices.BTC||0};
+  const last=p.snaps[p.snaps.length-1];
+  if(last&&last.d===e.d)p.snaps[p.snaps.length-1]=e;else p.snaps.push(e);
+  if(p.snaps.length>1500)p.snaps.splice(0,p.snaps.length-1500);
+}
+function metrics(p,L){
+  const sn=p.snaps.filter(s=>s.v>0).slice().sort((a,b)=>a.d<b.d?-1:1);
+  const m={points:sn.length};
+  m.totalRet=L.inflow>0?L.pnl/L.inflow:null;
+  const z=zones(L);m.stableShare=z.t?z.s/z.t:null;
+  const locs=byLoc(p,L);m.maxLoc=z.t&&locs.length?locs[0].value/z.t:null;m.maxLocName=locs.length?locName(p,locs[0].loc):'';
+  const since=new Date(Date.now()-30*864e5).toISOString().slice(0,10);
+  const inc30=p.txs.filter(t=>t.type==='income'&&t.date>=since).reduce((s,t)=>s+num(t.value),0);
+  m.income30=inc30;m.passiveYield=L.value>0?inc30*12/L.value:null;
+  if(p.plan){
+    const tot={};L.pos.forEach(x=>{const k=allocKey(p.plan,x.asset);tot[k]=(tot[k]||0)+x.value});
+    let d=0;const keys=new Set([...p.plan.alloc.map(a=>a.k),...Object.keys(tot)]);
+    keys.forEach(k=>{const t=(p.plan.alloc.find(a=>a.k===k)||{pct:0}).pct/100;const a=L.value?(tot[k]||0)/L.value:0;d+=Math.abs(a-t)});
+    m.drift=L.value?d/2:null;
+    const need=p.plan.target*12/(S.settings.targetRate/100);m.progress=need?L.value/need:null;m.need=need;
+    m.runway=p.plan.target?z.s/p.plan.target:null;
+    m.incomeVsTarget=p.plan.target?inc30/p.plan.target:null;
+  }
+  if(sn.length<2)return m;
+  const rets=[];let idx=1,peak=1,mdd=0;const series=[{d:sn[0].d,i:1}];
+  for(let i=1;i<sn.length;i++){const a=sn[i-1],b=sn[i];const flow=b.f-a.f;if(a.v<=0)continue;const r=(b.v-flow)/a.v-1;rets.push(r);idx*=1+r;peak=Math.max(peak,idx);mdd=Math.min(mdd,idx/peak-1);series.push({d:b.d,i:idx})}
+  const days=(new Date(sn[sn.length-1].d)-new Date(sn[0].d))/864e5;
+  m.twr=idx-1;m.days=days;m.mdd=mdd;m.series=series;
+  if(days>=30){m.ann=Math.pow(idx,365/days)-1}
+  if(rets.length>=3&&days>0){
+    const per=365/(days/rets.length);const mean=rets.reduce((s,x)=>s+x,0)/rets.length;
+    const sd=Math.sqrt(rets.reduce((s,x)=>s+(x-mean)**2,0)/(rets.length-1));
+    const dd=Math.sqrt(rets.reduce((s,x)=>s+Math.min(0,x)**2,0)/rets.length);
+    m.vol=sd*Math.sqrt(per);const annR=m.ann??(mean*per);const rf=S.settings.riskFree/100;
+    m.sharpe=m.vol>0?(annR-rf)/m.vol:null;m.sortino=dd>0?(annR-rf)/(dd*Math.sqrt(per)):null;
+    m.calmar=mdd<0?annR/Math.abs(mdd):null;
+    m.winRate=rets.filter(x=>x>0).length/rets.length;
+  }
+  const b0=sn[0].b,b1=sn[sn.length-1].b;if(b0>0&&b1>0){m.btc=b1/b0-1;m.alpha=m.twr-m.btc}
+  return m;
+}
+
+/* ===================== комиссии ===================== */
+function tierFor(p,aum){const t=p.fees.tiers.slice().sort((a,b)=>a.from-b.from);let r=t[0];t.forEach(x=>{if(aum>=x.from)r=x});return r}
+function mgmtFee(p,aum){
+  const k=p.fees.annual?1/12:1;
+  if(p.fees.mode==='progressive'){const t=p.fees.tiers.slice().sort((a,b)=>a.from-b.from);let fee=0;t.forEach((x,i)=>{const hi=i<t.length-1?t[i+1].from:Infinity;const part=Math.max(0,Math.min(aum,hi)-x.from);fee+=part*x.mgmt/100});return fee*k}
+  return aum*tierFor(p,aum).mgmt/100*k;
+}
+function feeCalc(p,start,end,flows){
+  const profit=end-start-flows;
+  const hwmAdj=(p.hwm==null?start:p.hwm)+flows;
+  const base=p.fees.hwm?Math.max(0,end-Math.max(start+flows,hwmAdj)):Math.max(0,profit);
+  const tier=tierFor(p,end);
+  const mf=mgmtFee(p,end);const pf=base*tier.perf/100;
+  return{profit,base,mf,pf,total:mf+pf,tier,newHwm:Math.max(hwmAdj,end),ret:start>0?profit/start:null};
+}
+function flowsIn(p,ym){return p.txs.filter(t=>ymd(t.date)===ym).reduce((s,t)=>s+(t.type==='buy'?num(t.value):t.type==='sell'?-num(t.value):0),0)}
+
+/* ===================== стратегия ===================== */
+function planCalc(d){
+  const cons=S.settings.consRate/100,tr=S.settings.targetRate/100;
+  const need=d.target*12/tr;const nowIncome=d.capital*cons/12;const covers=nowIncome>=d.target&&d.target>0;
+  const partShare=d.capital>0?need/d.capital:Infinity;
+  let months=null;if(d.capital>=need)months=0;else{let v=d.capital;for(let i=1;i<=600;i++){v=v*(1+tr/12)+d.dca;if(v>=need){months=i;break}}}
+  return{need,nowIncome,covers,partShare,months,targetIncome:d.capital*tr/12};
+}
+function recommendModel(d,c){if(!d.withdraw)return'growth';if(c.covers)return'cashflow';return'hybrid'}
+function riskProfile(ans){const s=ans.reduce((a,b)=>a+(b||0),0);return{score:s,key:s<=10?'conservative':s<=15?'moderate':'aggressive'}}
+function suggestAlloc(profile,model){
+  const a={...PROFILES[profile].a};let shift=model==='cashflow'?15:model==='growth'?-10:0;
+  const g=a.BTC+a.ETH;shift=Math.max(-(a.STABLES-5),Math.min(shift,g-5));
+  const btc=Math.round((a.BTC-shift*a.BTC/g)),eth=Math.round(a.ETH-shift*a.ETH/g);
+  return[{k:'BTC',pct:btc},{k:'ETH',pct:eth},{k:'STABLES',pct:100-btc-eth}];
+}
+function isStableKey(k){return k==='STABLES'||(S.assets[k]&&S.assets[k].stable)}
+
+/* ===================== UI: общее ===================== */
+function toast(t){const el=$('#toast');el.textContent=t;el.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>el.hidden=true,2600)}
+function openSheet(title,html){$('#sheetBody').innerHTML=`<div class="sheet-head"><h3>${esc(title)}</h3><button class="icon-btn" data-a="closeSheet" aria-label="Закрыть">✕</button></div>${html}`;$('#sheet').hidden=false}
+function closeSheet(){$('#sheet').hidden=true;$('#sheetBody').innerHTML=''}
+const ICONS={
+ home:'<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
+ assets:'<circle cx="9" cy="9" r="6"/><path d="M15.5 9.5a6 6 0 1 1-6 6"/>',
+ plan:'<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+ metrics:'<path d="M3 17l5-5 4 4 8-9"/><path d="M15 7h5v5"/>',
+ clients:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14.5a6.5 6.5 0 0 1 3.5 5.5"/>'
+};
+const TABS=[['home','Обзор'],['assets','Активы'],['plan','Стратегия'],['metrics','Метрики'],['clients','Клиенты']];
+
+function render(){
+  const p=P();
+  $('#pfSel').innerHTML=S.portfolios.map(x=>`<option value="${x.id}" ${x.id===p.id?'selected':''}>${esc(x.name)}${x.owner?'':' (клиент)'}</option>`).join('')+'<option value="__new">+ Добавить клиента</option>';
+  $('#tabs').innerHTML=TABS.map(([k,t])=>`<button data-a="tab" data-k="${k}" aria-current="${TAB===k}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONS[k]}</svg>${t}</button>`).join('');
+  const v={home:vHome,assets:vAssets,plan:vPlan,metrics:vMetrics,clients:vClients}[TAB]();
+  $('#view').innerHTML=v;
+}
+
+function priceBanner(L){
+  if(L.missing.length)return`<div class="callout">Нет курса для ${L.missing.map(esc).join(', ')}. <button class="btn sm" data-a="settings">Указать курсы</button></div>`;
+  return'';
+}
+
+/* ===================== Обзор ===================== */
+function vHome(){
+  const p=P();const L=ledger(p,S.prices);
+  if(!p.plan&&!p.txs.length){
+    return`<div class="empty"><div class="big">${p.owner?'С чего начнём?':esc(p.name)}</div>
+    <p class="muted">Сначала определим цель: сколько капитал должен приносить в месяц, какая модель подходит и как распределить активы.</p>
+    <button class="btn primary block" data-a="wizard">Пройти опросник</button>
+    <div class="btns" style="justify-content:center"><button class="btn" data-a="addTx">Сразу добавить активы</button>${S.portfolios.some(x=>x.name.includes('пример'))?'':'<button class="btn" data-a="demo">Открыть пример клиента</button>'}</div></div>`;
+  }
+  const z=zones(L);const g=z.t?z.g/z.t:0;
+  const tgtG=p.plan?p.plan.alloc.filter(a=>!isStableKey(a.k)).reduce((s,a)=>s+a.pct,0)/100:null;
+  const assets=byAsset(L);const locs=byLoc(p,L);
+  const pnlPct=L.inflow>0?L.pnl/L.inflow:null;
+  let h=`<section class="hero"><div class="who">${esc(p.name)}${S.pricesAt?`, курсы ${new Date(S.pricesAt).toLocaleString('ru-RU',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}`:''}</div>
+  <div class="big">${money(L.value)}</div>
+  <div class="pl"><span class="${cls(L.pnl)}">${money(L.pnl,{sign:true})} (${pct(pnlPct,{sign:true})})</span><span class="muted">вложено ${money(L.net)}</span></div>
+  <div class="zonebar"><div class="bar" role="img" aria-label="Зона роста ${pct(g)}, зона стабильности ${pct(1-g)}">
+   <div class="g" style="width:${g*100}%"></div><div class="s" style="width:${z.t?(1-g)*100:0}%"></div>${tgtG!=null?`<span class="tick" style="left:calc(${tgtG*100}% - 1px)" title="Целевая граница"></span>`:''}</div>
+   <div class="legend"><span><span class="dot" style="background:var(--gold)"></span>Зона роста <b>${pct(g)}</b> ${money(z.g)}</span><span><span class="dot" style="background:var(--teal)"></span>Стабильность <b>${pct(z.t?1-g:0)}</b> ${money(z.s)}</span></div>
+   ${tgtG!=null?`<div class="small muted" style="margin-top:4px">Чёрная риска — целевое соотношение по стратегии: ${pct(tgtG,{dec:0})} / ${pct(1-tgtG,{dec:0})}</div>`:''}
+  </div></section>${priceBanner(L)}`;
+  h+=`<div class="btns"><button class="btn primary" data-a="addTx">Добавить операцию</button><button class="btn" data-a="refresh">Обновить курсы</button></div>`;
+  if(assets.length){
+    h+=`<h2>Сколько чего у ${p.owner?'меня':'клиента'}</h2><div class="tiles">${assets.map(a=>{const pp=a.cost?(a.value-a.cost)/a.cost:null;return`<button class="tile" style="text-align:left;cursor:pointer" data-a="openAsset" data-k="${a.asset}"><div class="sym">${esc(a.asset)}</div><div class="q">${qfmt(a.qty,a.asset)}</div><div>${money(a.value)}</div><div class="small ${cls(pp)}">${S.assets[a.asset]&&S.assets[a.asset].stable?'&nbsp;':pct(pp,{sign:true})+' к цене входа'}</div></button>`}).join('')}</div>`;
+    h+=`<h2>Где лежит капитал</h2><div class="list">${locs.map(l=>`<div class="row"><div class="grow"><div><b>${esc(locName(p,l.loc))}</b> <span class="pill">${esc(locKind(p,l.loc))}</span></div><div class="small muted">${l.items.map(i=>qfmt(i.qty,i.asset)+' '+esc(i.asset)).join(', ')}</div><div class="share"><i style="width:${z.t?l.value/z.t*100:0}%"></i></div></div><div class="r"><b>${money(l.value)}</b><div class="small muted">${pct(z.t?l.value/z.t:0)}</div></div></div>`).join('')}</div>`;
+  }
+  if(p.plan){
+    const c=planCalc(p.plan);const prog=c.need?L.value/c.need:0;
+    const tot={};L.pos.forEach(x=>{const k=allocKey(p.plan,x.asset);tot[k]=(tot[k]||0)+x.value});
+    const keys=[...new Set([...p.plan.alloc.map(a=>a.k),...Object.keys(tot)])];
+    h+=`<h2>Факт против стратегии</h2><div class="card scroll"><table class="t"><thead><tr><th>Актив</th><th class="n">Цель</th><th class="n">Факт</th><th class="n">Докупить / продать</th></tr></thead><tbody>${keys.map(k=>{const t=(p.plan.alloc.find(a=>a.k===k)||{pct:0}).pct/100;const a=L.value?(tot[k]||0)/L.value:0;const diff=t*L.value-(tot[k]||0);return`<tr><td>${esc(keyName(k))}</td><td class="n">${pct(t,{dec:0})}</td><td class="n">${pct(a)}</td><td class="n ${Math.abs(diff)<L.value*0.02?'muted':''}">${money(diff,{sign:true})}</td></tr>`}).join('')}</tbody></table></div>
+    <h2>Путь к цели</h2><div class="card"><div class="kv">
+     <span>Модель</span><span class="v">${MODELS[p.plan.model].t}</span>
+     <span>Цель в месяц</span><span class="v">${money(p.plan.target)}</span>
+     <span>Нужный капитал</span><span class="v">${money(c.need)}</span>
+     <span>Сейчас</span><span class="v">${money(L.value)} (${pct(prog,{dec:0})})</span>
+     <span>При ${S.settings.consRate}% годовых капитал даёт</span><span class="v">${money(L.value*S.settings.consRate/100/12)} в мес.</span>
+    </div><div class="share" style="height:8px;margin-top:12px"><i style="width:${Math.min(100,prog*100)}%;background:var(--gold);opacity:1"></i></div></div>`;
+  }else{
+    h+=`<div class="callout teal" style="margin-top:24px">Стратегия не задана — без неё не видно отклонений от целевых пропорций. <button class="btn sm" data-a="wizard">Пройти опросник</button></div>`;
+  }
+  return h;
+}
+
+/* ===================== Активы ===================== */
+function vAssets(){
+  const p=P();const L=ledger(p,S.prices);const assets=byAsset(L);
+  let h=`<div class="btns" style="margin-top:16px"><button class="btn primary" data-a="addTx">Добавить операцию</button><button class="btn" data-a="locations">Площадки (${p.locations.length})</button></div>${priceBanner(L)}`;
+  h+=`<h2>Позиции</h2>`;
+  if(!assets.length)h+=`<div class="card muted">Пока пусто. Добавьте покупку или перенос уже имеющихся активов операцией «Покупка / пополнение» — по цене, за которую они были куплены.</div>`;
+  else h+=`<div class="list">${assets.map(a=>{const open=OPEN_ASSET===a.asset;const pn=a.value-a.cost;return`<button class="row btnrow" data-a="openAsset" data-k="${a.asset}" aria-expanded="${open}"><div class="grow"><b>${esc(a.asset)}</b> <span class="muted small">${qfmt(a.qty,a.asset)} шт., средняя ${a.qty?usd(a.cost/a.qty,a.cost/a.qty<10?4:0):'—'}</span></div><div class="r"><b>${money(a.value)}</b><div class="small ${cls(pn)}">${money(pn,{sign:true})}</div></div></button>${open?a.locs.map(x=>`<div class="row" style="padding-left:28px;background:var(--bg)"><div class="grow small">${esc(locName(p,x.loc))} <span class="muted">${esc(locKind(p,x.loc))}</span></div><div class="r small">${qfmt(x.qty,x.asset)} · ${money(x.value)}</div></div>`).join(''):''}`}).join('')}</div>`;
+  const txs=p.txs.slice().sort((a,b)=>a.date<b.date?1:-1);
+  h+=`<h2>Операции</h2>`;
+  if(!txs.length)h+=`<div class="card muted">Операций ещё нет.</div>`;
+  else h+=`<div class="list">${txs.slice(0,200).map(t=>`<button class="row btnrow" data-a="editTx" data-k="${t.id}"><div class="grow"><div><b>${TX_TYPES[t.type]}</b> <span class="muted small">${new Date(t.date).toLocaleDateString('ru-RU')}</span></div><div class="small muted">${txLine(p,t)}</div></div><div class="r">${t.type==='transfer'?'':`<span class="${t.type==='sell'?'down':t.type==='income'?'up':''}">${usd(num(t.value))}</span>`}</div></button>`).join('')}</div>`;
+  return h;
+}
+function txLine(p,t){
+  const a=`${qfmt(num(t.qty),t.asset)} ${esc(t.asset)}`;
+  if(t.type==='swap')return`${a} → ${qfmt(num(t.toQty),t.toAsset)} ${esc(t.toAsset)}, ${esc(locName(p,t.loc))}`;
+  if(t.type==='transfer')return`${a}: ${esc(locName(p,t.loc))} → ${esc(locName(p,t.toLoc))}`;
+  return`${a}, ${esc(locName(p,t.loc))}${t.note?', '+esc(t.note):''}`;
+}
+function assetOpts(sel){return Object.keys(S.assets).map(k=>`<option value="${k}" ${k===sel?'selected':''}>${k}</option>`).join('')}
+function locOpts(p,sel){return p.locations.map(l=>`<option value="${l.id}" ${l.id===sel?'selected':''}>${esc(l.name)} (${esc(l.kind)})</option>`).join('')+`<option value="__new" ${!p.locations.length||sel==='__new'?'selected':''}>+ Новая площадка</option>`}
+function txForm(t){
+  const p=P();const ty=t.type||'buy';
+  const pr=t.price??(S.prices[t.asset||'BTC']||'');
+  const newLoc=(name,sel)=>`<div class="grid2" data-newloc="${name}" ${sel==='__new'||!p.locations.length?'':'hidden'}><div class="field"><label>Название площадки</label><input class="inp" name="${name}Name" placeholder="Bybit, Aave, Ledger…"></div><div class="field"><label>Тип</label><select class="inp" name="${name}Kind">${LOC_KINDS.map(k=>`<option>${k}</option>`).join('')}</select></div></div>`;
+  let h=`<form id="txf" onsubmit="return false"><input type="hidden" name="id" value="${t.id||''}">
+  <div class="field"><label>Тип операции</label><select class="inp" name="type" data-rerender>${Object.entries(TX_TYPES).map(([k,v])=>`<option value="${k}" ${k===ty?'selected':''}>${v}</option>`).join('')}</select></div>
+  <div class="small muted" style="margin:-4px 0 12px">${{buy:'Новые деньги клиента заходят в актив — учитывается как вложение.',sell:'Актив продан и выведен из портфеля в реальную жизнь.',swap:'Один актив обменян на другой внутри портфеля, деньги не заходят и не выходят.',income:'Проценты лендинга, стейкинг, премия опционов, прибыль бота — это заработок, не вложение.',transfer:'Перенос актива с одной площадки на другую.'}[ty]}</div>
+  <div class="grid2"><div class="field"><label>Дата</label><input class="inp" type="date" name="date" value="${t.date||today()}"></div>
+  <div class="field"><label>${ty==='swap'?'Отдаю актив':'Актив'}</label><select class="inp" name="asset" data-rerender>${assetOpts(t.asset||'BTC')}</select></div></div>
+  <div class="grid2"><div class="field"><label>Количество</label><input class="inp" inputmode="decimal" name="qty" value="${t.qty??''}" placeholder="0.05"></div>
+  ${ty==='swap'||ty==='transfer'?'<div></div>':`<div class="field"><label>Цена за 1, $</label><input class="inp" inputmode="decimal" name="price" value="${pr}"></div>`}</div>
+  <div class="field"><label>${ty==='transfer'?'Откуда':'Площадка'}</label><select class="inp" name="loc" data-newsel="loc">${locOpts(p,t.loc)}</select></div>${newLoc('loc',t.loc)}`;
+  if(ty==='swap'){h+=`<div class="grid2"><div class="field"><label>Получаю актив</label><select class="inp" name="toAsset">${assetOpts(t.toAsset||'USDT')}</select></div><div class="field"><label>Количество</label><input class="inp" inputmode="decimal" name="toQty" value="${t.toQty??''}"></div></div>
+   <div class="field"><label>Сумма сделки, $ (стоимость полученного)</label><input class="inp" inputmode="decimal" name="value" value="${t.value??''}" placeholder="если пусто — по текущему курсу"></div>`}
+  if(ty==='transfer'){h+=`<div class="field"><label>Куда</label><select class="inp" name="toLoc" data-newsel="toLoc">${locOpts(p,t.toLoc)}</select></div>${newLoc('toLoc',t.toLoc)}<div class="field"><label>Комиссия сети, в штуках актива</label><input class="inp" inputmode="decimal" name="fee" value="${t.fee??''}" placeholder="0"></div>`}
+  h+=`<div class="field"><label>Заметка</label><input class="inp" name="note" value="${esc(t.note||'')}" placeholder="необязательно"></div>
+  <div class="btns"><button class="btn primary" data-a="saveTx">${t.id?'Сохранить':'Добавить'}</button>${t.id?'<button class="btn danger" data-a="delTx">Удалить</button>':''}</div></form>`;
+  return h;
+}
+function readForm(id){const f=$(id);const o={};new FormData(f).forEach((v,k)=>o[k]=v);return o}
+function ensureLoc(p,o,field){if(o[field]!=='__new')return o[field];const name=(o[field+'Name']||'').trim();if(!name)return null;const l={id:uid(),name,kind:o[field+'Kind']||'Другое'};p.locations.push(l);return l.id}
+
+/* ===================== Стратегия ===================== */
+function vPlan(){
+  if(W)return vWizard();
+  const p=P();
+  if(!p.plan)return`<div class="empty"><div class="big">Стратегия</div><p class="muted">Опросник займёт пару минут: цель по доходу, модель, отношение к риску и пропорции активов.</p><button class="btn primary block" data-a="wizard">Пройти опросник</button></div>`;
+  const pl=p.plan;const c=planCalc(pl);
+  return`<h2>Цели ${p.owner?'':'клиента'}</h2><div class="card"><div class="kv">
+   <span>Сумма, которую хочу извлекать в месяц</span><span class="v">${money(pl.target)}</span>
+   <span>Капитал, который для этого нужен (${S.settings.targetRate}% годовых)</span><span class="v">${money(c.need)}</span>
+   <span>Капитал на старте</span><span class="v">${money(pl.capital)}</span>
+   <span>Сколько он может приносить сейчас (${S.settings.consRate}% годовых)</span><span class="v">${money(c.nowIncome)} в мес.</span>
+   <span>Хочу выводить сейчас</span><span class="v">${pl.withdraw?'Да':'Нет'}</span>
+   <span>Регулярно инвестирую</span><span class="v">${money(pl.dca)} в мес.</span>
+   <span>Цель будет достигнута</span><span class="v">${c.months===0?'уже':c.months?fmtMonths(c.months):'не при таком взносе'}</span>
+  </div></div>
+  <h2>Модель: ${MODELS[pl.model].t}</h2><p class="muted" style="margin-top:-4px">${MODELS[pl.model].d} Риск-профиль: ${PROFILES[pl.profile].t.toLowerCase()} (${pl.score} из 20).</p>
+  ${allocTables(pl)}
+  <div class="btns"><button class="btn" data-a="wizard">Пересобрать стратегию</button><button class="btn" data-a="editAlloc">Изменить пропорции</button></div>`;
+}
+function fmtMonths(m){const y=Math.floor(m/12),mm=m%12;return(y?y+' г. ':'')+(mm?mm+' мес.':'')}
+function allocTables(pl){
+  const growth=pl.alloc.filter(a=>!isStableKey(a.k)).reduce((s,a)=>s+a.pct,0);
+  return`<div class="card scroll"><h3 style="margin-bottom:6px">Пропорция активов и покупки по DCA</h3><table class="t"><thead><tr><th>Актив</th><th class="n">Доля</th><th class="n">Каждый месяц</th></tr></thead><tbody>
+  ${pl.alloc.map(a=>`<tr><td><span class="dot" style="background:${isStableKey(a.k)?'var(--teal)':'var(--gold)'}"></span>${esc(keyName(a.k))}</td><td class="n">${nf(1).format(a.pct)}%</td><td class="n">${money(pl.dca*a.pct/100)}</td></tr>`).join('')}
+  <tr><td><b>Итого</b></td><td class="n"><b>${nf(1).format(pl.alloc.reduce((s,a)=>s+a.pct,0))}%</b></td><td class="n"><b>${money(pl.dca)}</b></td></tr></tbody></table>
+  <h3 style="margin:16px 0 6px">Распределение по зонам</h3><table class="t"><tbody>
+  <tr><td><span class="dot" style="background:var(--gold)"></span>Зона роста</td><td class="n">${nf(1).format(growth)}%</td><td class="n">${money(pl.dca*growth/100)}</td></tr>
+  <tr><td><span class="dot" style="background:var(--teal)"></span>Зона стабильности</td><td class="n">${nf(1).format(100-growth)}%</td><td class="n">${money(pl.dca*(100-growth)/100)}</td></tr></tbody></table></div>`;
+}
+function startWizard(){const p=P();const pl=p.plan;const L=ledger(p,S.prices);
+  W={step:0,d:pl?JSON.parse(JSON.stringify(pl)):{target:5000,capital:Math.round(L.value)||0,dca:1000,withdraw:false,model:null,answers:[],alloc:null}};TAB='plan';render();window.scrollTo(0,0)}
+function vWizard(){
+  const d=W.d;const c=planCalc(d);const steps=`<div class="steps">${[0,1,2,3].map(i=>`<i class="${i<=W.step?'on':''}"></i>`).join('')}</div>`;
+  if(W.step===0){
+    return`${steps}<h2 style="margin-top:8px">Шаг 1. Цель</h2>
+    <div class="field"><label>Какую сумму хочу извлекать из капитала в месяц, $</label><input class="inp" inputmode="decimal" data-w="target" value="${d.target}"></div>
+    <div class="field"><label>Какой капитал сейчас, $</label><input class="inp" inputmode="decimal" data-w="capital" value="${d.capital}"></div>
+    <div class="field"><label>Сколько регулярно инвестирую каждый месяц, $</label><input class="inp" inputmode="decimal" data-w="dca" value="${d.dca}"></div>
+    <div class="lbl" style="margin-bottom:6px">Хочу ли выводить сумму в реальную жизнь уже сейчас?</div>
+    <div class="seg"><button class="opt" data-a="wset" data-k="withdraw" data-v="1" aria-pressed="${d.withdraw}"><b>Да, выводить сейчас</b></button><button class="opt" data-a="wset" data-k="withdraw" data-v="0" aria-pressed="${!d.withdraw}"><b>Нет, пока растим</b></button></div>
+    <div id="wcalc">${wizCalc(d,c)}</div>
+    <div class="btns"><button class="btn primary" data-a="wnext">Дальше</button><button class="btn" data-a="wcancel">Отмена</button></div>`;
+  }
+  if(W.step===1){
+    const rec=recommendModel(d,c);if(!d.model)d.model=rec;
+    return`${steps}<h2 style="margin-top:8px">Шаг 2. Модель</h2><p class="muted">Рекомендую: <b>${MODELS[rec].t}</b>. ${rec==='cashflow'?'Капитал уже покрывает цель.':rec==='hybrid'?'Вывод нужен сейчас, но капитала пока не хватает на всю сумму — часть выводим, остальное растим.':'Вывод сейчас не нужен — всё работает на рост.'}</p>
+    <div class="seg">${Object.entries(MODELS).map(([k,m])=>`<button class="opt" data-a="wset" data-k="model" data-v="${k}" aria-pressed="${d.model===k}"><b>${m.t}</b><span class="small">${m.d}</span></button>`).join('')}</div>
+    ${d.model!=='growth'?`<div class="callout teal">Можно выводить сейчас без проедания капитала: ${money(Math.min(d.target,c.nowIncome))} в месяц (${S.settings.consRate}% годовых от ${money(d.capital)}).</div>`:''}
+    <div class="btns"><button class="btn primary" data-a="wnext">Дальше</button><button class="btn" data-a="wback">Назад</button></div>`;
+  }
+  if(W.step===2){
+    return`${steps}<h2 style="margin-top:8px">Шаг 3. Отношение к риску</h2>${RISK_Q.map((q,i)=>`<div class="q">${i+1}. ${q.q}</div><div class="seg">${q.o.map((o,j)=>`<button class="opt" style="flex-basis:120px" data-a="wans" data-k="${i}" data-v="${j+1}" aria-pressed="${d.answers[i]===j+1}">${o}</button>`).join('')}</div>`).join('')}
+    <div class="btns"><button class="btn primary" data-a="wnext" ${d.answers.filter(Boolean).length<RISK_Q.length?'disabled style="opacity:.5"':''}>Дальше</button><button class="btn" data-a="wback">Назад</button></div>`;
+  }
+  const r=riskProfile(d.answers);d.profile=r.key;d.score=r.score;
+  if(!d.alloc||W.resetAlloc){d.alloc=suggestAlloc(r.key,d.model);W.resetAlloc=false}
+  return`${steps}<h2 style="margin-top:8px">Шаг 4. Активы и пропорции</h2>
+  <p class="muted">Профиль: <b>${PROFILES[r.key].t}</b> (${r.score} из 20), модель: <b>${MODELS[d.model].t}</b>. Пропорции можно поправить.</p>
+  ${allocEditor(d.alloc)}
+  <div class="field" style="margin-top:12px"><label>Регулярный взнос в месяц, $</label><input class="inp" inputmode="decimal" data-w="dca" value="${d.dca}"></div>
+  ${allocTables(d)}
+  <div class="btns"><button class="btn primary" data-a="wfinish">Сохранить стратегию</button><button class="btn" data-a="wback">Назад</button></div>`;
+}
+function wizCalc(d,c){
+  return`<div class="card" style="margin-top:16px"><div class="kv">
+   <span>Капитал, чтобы получать ${money(d.target)} в месяц (${S.settings.targetRate}% годовых)</span><span class="v">${money(c.need)}</span>
+   <span>Может ли капитал приносить эту сумму сейчас? (${S.settings.consRate}% годовых)</span><span class="v ${c.covers?'up':'down'}">${c.covers?'Да':'Нет'}, ${money(c.nowIncome)}</span>
+   <span>Может ли часть капитала приносить цель по ${S.settings.targetRate}%?</span><span class="v">${c.partShare<=1?`Да, ${pct(c.partShare,{dec:0})} капитала`:`Нет, даст ${money(c.targetIncome)}`}</span>
+   <span>Когда капитал дорастёт с учётом взносов</span><span class="v">${c.months===0?'уже':c.months?fmtMonths(c.months):'не при таком взносе'}</span>
+  </div></div>`;
+}
+function allocEditor(al){
+  const sum=al.reduce((s,a)=>s+num(a.pct),0);
+  const keys=['STABLES',...Object.keys(S.assets).filter(k=>!S.assets[k].stable)];
+  return`<div class="card">${al.map((a,i)=>`<div class="grid2" style="grid-template-columns:1fr 110px 40px;align-items:center;margin-bottom:8px"><select class="inp" data-al="k" data-i="${i}">${keys.map(k=>`<option value="${k}" ${k===a.k?'selected':''}>${keyName(k)}</option>`).join('')}</select><input class="inp" inputmode="decimal" data-al="pct" data-i="${i}" value="${a.pct}" aria-label="Доля, %"><button class="icon-btn" data-a="alDel" data-i="${i}" aria-label="Убрать">✕</button></div>`).join('')}
+  <div style="display:flex;justify-content:space-between;align-items:center"><button class="btn sm" data-a="alAdd">Добавить актив</button><span class="${Math.abs(sum-100)<0.01?'up':'down'}">Сумма ${nf(1).format(sum)}%</span></div></div>`;
+}
+
+/* ===================== Метрики ===================== */
+function vMetrics(){
+  const p=P();const L=ledger(p,S.prices);const m=metrics(p,L);
+  const k=(title,val,hint,tone)=>`<div class="kpi"><div class="small">${title}</div><div class="n ${tone||''}">${val}</div><div class="h">${hint}</div></div>`;
+  const grade=(x,good,ok)=>x==null?'':x>=good?'up':x>=ok?'':'down';
+  let h=`<h2>Стоимость и вложения</h2>${chart(p)}`;
+  h+=`<h2>Доходность</h2><div class="kpis">
+   ${k('Прибыль / убыток',money(L.pnl,{sign:true}),'Текущая стоимость плюс выведенное минус вложенное.',cls(L.pnl))}
+   ${k('Доходность на вложенное',pct(m.totalRet,{sign:true}),'Прибыль, делённая на все вложенные деньги.',cls(m.totalRet))}
+   ${k('Доходность управления (TWR)',pct(m.twr,{sign:true}),'Очищена от пополнений и выводов — показывает качество управления, а не размер взносов.',cls(m.twr))}
+   ${k('Годовая доходность',m.ann!=null?pct(m.ann,{sign:true}):'нужно 30+ дней','TWR в пересчёте на год.',cls(m.ann))}
+   ${k('Против BTC',m.alpha!=null?pct(m.alpha,{sign:true}):'—',m.btc!=null?`Биткоин за тот же период ${pct(m.btc,{sign:true})}. Плюс — управление обгоняет простое удержание BTC.`:'Сравнение с простым удержанием BTC.',cls(m.alpha))}
+   ${k('Реализованная прибыль',money(L.realized,{sign:true}),'Зафиксировано продажами и обменами.',cls(L.realized))}
+  </div>
+  <h2>Риск и качество</h2><div class="kpis">
+   ${k('Максимальная просадка',pct(m.mdd),'Самое глубокое падение от пика. Для крипто-портфеля до −25% — спокойно, ниже −50% — много.',m.mdd==null?'':m.mdd>-0.25?'up':m.mdd>-0.5?'':'down')}
+   ${k('Волатильность',pct(m.vol),'Годовой размах колебаний. У BTC обычно 50–70%.','')}
+   ${k('Коэффициент Шарпа',m.sharpe!=null?nf(2).format(m.sharpe):'—',`Доходность сверх безрисковых ${S.settings.riskFree}% на единицу риска. Выше 1 — хорошо, выше 2 — отлично.`,grade(m.sharpe,1,0.5))}
+   ${k('Коэффициент Сортино',m.sortino!=null?nf(2).format(m.sortino):'—','Как Шарп, но штрафует только падения. Выше 1.5 — хорошо.',grade(m.sortino,1.5,0.7))}
+   ${k('Коэффициент Калмара',m.calmar!=null?nf(2).format(m.calmar):'—','Годовая доходность к максимальной просадке. Выше 1 — прибыль окупает худшую просадку.',grade(m.calmar,1,0.5))}
+   ${k('Доля растущих периодов',pct(m.winRate,{dec:0}),'Как часто стоимость росла между замерами.',grade(m.winRate,0.55,0.45))}
+  </div>
+  <h2>Капитал и цель</h2><div class="kpis">
+   ${k('Пассивный доход, 30 дней',money(m.income30),`Лендинг, стейкинг, опционы, боты. В пересчёте на год ${pct(m.passiveYield)} от капитала.`,'')}
+   ${m.incomeVsTarget!=null?k('Покрытие цели доходом',pct(m.incomeVsTarget,{dec:0}),`Сколько от цели ${money(p.plan.target)} в месяц уже даёт пассивный доход.`,grade(m.incomeVsTarget,1,0.5)):''}
+   ${m.progress!=null?k('Прогресс к капиталу',pct(m.progress,{dec:0}),`Нужно ${money(m.need)}.`,grade(m.progress,1,0.5)):''}
+   ${k('Зона стабильности',pct(m.stableShare),m.runway!=null?`Хватит на ${nf(1).format(m.runway)} мес. выплат по цели без продажи BTC и ETH.`:'Доля стейблкоинов — подушка на просадках.','')}
+   ${m.drift!=null?k('Отклонение от стратегии',pct(m.drift),'Какую долю капитала нужно переложить, чтобы вернуться к целевым пропорциям. Больше 10% — пора ребалансировать.',m.drift<0.05?'up':m.drift<0.1?'':'down'):''}
+   ${k('Концентрация на площадке',pct(m.maxLoc),m.maxLocName?`Больше всего лежит в «${esc(m.maxLocName)}». Больше 50% на одной бирже или протоколе — риск контрагента.`:'Риск контрагента.',m.maxLoc==null?'':m.maxLoc<=0.5?'up':m.maxLoc<=0.7?'':'down')}
+  </div>`;
+  if(m.points<4)h+=`<p class="small muted" style="margin-top:14px">История пишется автоматически раз в день, когда приложение открыто и есть курсы. Риск-метрики станут точными примерно через месяц наблюдений. Сейчас замеров: ${m.points}.</p>`;
+  return h;
+}
+function chart(p){
+  const sn=p.snaps.filter(s=>s.v>0);
+  if(sn.length<2)return`<div class="card muted small">График появится после двух дней наблюдений.</div>`;
+  const W_=600,H=220,pad=34;const xs=sn.map(s=>+new Date(s.d));const x0=Math.min(...xs),x1=Math.max(...xs)||x0+1;
+  const ymax=Math.max(...sn.map(s=>Math.max(s.v,s.f)))*1.08,ymin=0;
+  const X=t=>pad+(t-x0)/(x1-x0||1)*(W_-pad-8),Y=v=>H-24-(v-ymin)/(ymax-ymin||1)*(H-40);
+  const line=k=>sn.map((s,i)=>(i?'L':'M')+X(+new Date(s.d)).toFixed(1)+','+Y(s[k]).toFixed(1)).join('');
+  const area=line('v')+`L${X(x1)},${Y(0)}L${X(x0)},${Y(0)}Z`;
+  const ticks=[0,.5,1].map(f=>ymin+(ymax-ymin)*f);
+  return`<div class="chart"><svg viewBox="0 0 ${W_} ${H}" role="img" aria-label="График стоимости портфеля и вложенных средств">
+  ${ticks.map(v=>`<line x1="${pad}" x2="${W_-8}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)"/><text x="${pad-4}" y="${Y(v)+4}" text-anchor="end" font-size="11" fill="var(--muted)">${compact(v)}</text>`).join('')}
+  <path d="${area}" fill="var(--gold)" opacity=".14"/><path d="${line('v')}" fill="none" stroke="var(--gold)" stroke-width="2.5"/>
+  <path d="${line('f')}" fill="none" stroke="var(--teal)" stroke-width="2" stroke-dasharray="5 4"/>
+  <text x="${pad}" y="${H-6}" font-size="11" fill="var(--muted)">${new Date(x0).toLocaleDateString('ru-RU',{month:'short',year:'2-digit'})}</text><text x="${W_-8}" y="${H-6}" text-anchor="end" font-size="11" fill="var(--muted)">${new Date(x1).toLocaleDateString('ru-RU',{month:'short',year:'2-digit'})}</text>
+  </svg><div class="small" style="display:flex;gap:16px;margin-top:6px"><span><span class="dot" style="background:var(--gold)"></span>Стоимость</span><span><span class="dot" style="background:var(--teal)"></span>Вложено (чистые пополнения)</span></div></div>`;
+}
+function compact(v){v*=rate();return Math.abs(v)>=1e6?nf(1).format(v/1e6)+'M':Math.abs(v)>=1e3?nf(0).format(v/1e3)+'k':nf(0).format(v)}
+
+/* ===================== Клиенты и комиссии ===================== */
+function vClients(){
+  const p=P();
+  let h=`<h2>Все портфели</h2><div class="list">${S.portfolios.map(x=>{const L=ledger(x,S.prices);return`<button class="row btnrow" data-a="pick" data-k="${x.id}" ${x.id===p.id?'style="background:var(--bg)"':''}><div class="grow"><b>${esc(x.name)}</b> ${x.owner?'<span class="pill">мой</span>':''}<div class="small muted">${x.contact?esc(x.contact)+', ':''}${x.plan?MODELS[x.plan.model].t:'без стратегии'}</div></div><div class="r"><b>${money(L.value)}</b><div class="small ${cls(L.pnl)}">${money(L.pnl,{sign:true})}</div></div></button>`}).join('')}</div>
+  <div class="btns"><button class="btn primary" data-a="newClient">Добавить клиента</button></div>`;
+  const clients=S.portfolios.filter(x=>!x.owner);
+  if(clients.length){const aum=clients.reduce((s,x)=>s+ledger(x,S.prices).value,0);const mf=clients.reduce((s,x)=>s+mgmtFee(x,ledger(x,S.prices).value),0);
+    h+=`<div class="card" style="margin-top:12px"><div class="kv"><span>Под управлением (AUM), ${clients.length} кл.</span><span class="v">${money(aum)}</span><span>Management fee за месяц</span><span class="v">${money(mf)}</span><span>Начислено всего</span><span class="v">${money(clients.reduce((s,x)=>s+x.feeRecs.reduce((a,r)=>a+r.mf+r.pf,0),0))}</span><span>Не оплачено</span><span class="v">${money(clients.reduce((s,x)=>s+x.feeRecs.filter(r=>!r.paid).reduce((a,r)=>a+r.mf+r.pf,0),0))}</span></div></div>`}
+  if(p.owner){h+=`<p class="muted small" style="margin-top:14px">Выберите клиента, чтобы настроить комиссии и увидеть начисления.</p>`;return h}
+  const L=ledger(p,S.prices);const t=tierFor(p,L.value);
+  h+=`<h2>${esc(p.name)}: комиссии</h2><div class="card"><div class="kv">
+   <span>Активы под управлением (AUM)</span><span class="v">${money(L.value)}</span>
+   <span>Management fee, текущий уровень</span><span class="v">${nf(2).format(t.mgmt)}% ${p.fees.annual?'годовых':'в месяц'}</span>
+   <span>Performance fee, текущий уровень</span><span class="v">${nf(2).format(t.perf)}% от прибыли</span>
+   <span>Management fee за этот месяц</span><span class="v">${money(mgmtFee(p,L.value))}</span>
+   <span>High-water mark</span><span class="v">${p.fees.hwm?(p.hwm!=null?money(p.hwm):'с первого расчёта'):'выключен'}</span>
+  </div><div class="btns"><button class="btn gold" data-a="closeMonth">Рассчитать комиссию за месяц</button><button class="btn" data-a="feeCfg">Ставки и уровни</button></div></div>`;
+  if(p.feeRecs.length){h+=`<h2>Начисления</h2><div class="card scroll"><table class="t"><thead><tr><th>Месяц</th><th class="n">AUM</th><th class="n">Прибыль</th><th class="n">Mgmt</th><th class="n">Perf</th><th class="n">Статус</th></tr></thead><tbody>${p.feeRecs.slice().reverse().map(r=>`<tr><td>${r.period}</td><td class="n">${money(r.end)}</td><td class="n ${cls(r.profit)}">${money(r.profit,{sign:true})}</td><td class="n">${money(r.mf)}</td><td class="n">${money(r.pf)}</td><td class="n"><button class="btn sm ${r.paid?'':'gold'}" data-a="togglePaid" data-k="${r.id}">${r.paid?'Оплачено':'Ждёт оплаты'}</button> <button class="btn sm" data-a="delFee" data-k="${r.id}" aria-label="Удалить запись">✕</button></td></tr>`).join('')}</tbody></table></div>`}
+  h+=`<h2>Клиент</h2><div class="card"><div class="field"><label>Имя</label><input class="inp" data-pf="name" value="${esc(p.name)}"></div><div class="field"><label>Контакт (Telegram, телефон)</label><input class="inp" data-pf="contact" value="${esc(p.contact)}" placeholder="@username"></div><div class="field"><label>Заметка</label><input class="inp" data-pf="note" value="${esc(p.note)}"></div>
+  <div class="btns"><button class="btn" data-a="report">Отчёт клиенту</button><button class="btn danger" data-a="delClient">Удалить клиента</button></div></div>`;
+  return h;
+}
+function feeCfgHtml(p){
+  const f=p.fees;
+  return`<p class="small muted">Уровень выбирается по размеру капитала клиента. Первый уровень начинается с 0.</p>
+  ${f.tiers.map((t,i)=>`<div class="grid2" style="grid-template-columns:1fr 1fr 1fr 40px;align-items:end;margin-bottom:8px"><div class="field" style="margin:0"><label>От, $</label><input class="inp" inputmode="decimal" data-tier="from" data-i="${i}" value="${t.from}" ${i===0?'readonly':''}></div><div class="field" style="margin:0"><label>Mgmt, %</label><input class="inp" inputmode="decimal" data-tier="mgmt" data-i="${i}" value="${t.mgmt}"></div><div class="field" style="margin:0"><label>Perf, %</label><input class="inp" inputmode="decimal" data-tier="perf" data-i="${i}" value="${t.perf}"></div>${i?`<button class="icon-btn" data-a="tierDel" data-i="${i}" aria-label="Удалить уровень">✕</button>`:'<span></span>'}</div>`).join('')}
+  <button class="btn sm" data-a="tierAdd">Добавить уровень</button>
+  <div class="field" style="margin-top:16px"><label>Management fee — это ставка</label><select class="inp" data-fee="annual"><option value="1" ${f.annual?'selected':''}>годовая, начисляется 1/12 каждый месяц</option><option value="0" ${!f.annual?'selected':''}>месячная, начисляется целиком каждый месяц</option></select></div>
+  <div class="field"><label>Как применять уровни к management fee</label><select class="inp" data-fee="mode"><option value="flat" ${f.mode==='flat'?'selected':''}>весь капитал по ставке его уровня</option><option value="progressive" ${f.mode==='progressive'?'selected':''}>ступенчато: каждая часть по своей ставке</option></select></div>
+  <div class="field"><label>High-water mark</label><select class="inp" data-fee="hwm"><option value="1" ${f.hwm?'selected':''}>да — performance fee только с прибыли выше прошлого пика</option><option value="0" ${!f.hwm?'selected':''}>нет — с любой прибыли за месяц</option></select></div>
+  <div class="btns"><button class="btn primary" data-a="closeSheet">Готово</button></div>`;
+}
+function monthDefaults(p,ym){
+  const start=ym+'-01';const L=ledger(p,S.prices);
+  const prevRec=p.feeRecs.filter(r=>r.period<ym).sort((a,b)=>a.period<b.period?1:-1)[0];
+  const before=p.snaps.filter(s=>s.d<start).slice(-1)[0];
+  const s=prevRec?prevRec.end:before?before.v:ledger(p,S.prices,new Date(new Date(start)-864e5).toISOString().slice(0,10)).net;
+  const isCur=ym===today().slice(0,7);const inMonth=p.snaps.filter(x=>ymd(x.d)===ym).slice(-1)[0];
+  const e=isCur||!inMonth?L.value:inMonth.v;
+  return{start:r2(s),end:r2(e),flows:r2(flowsIn(p,ym))};
+}
+function closeMonthHtml(p,o){
+  const c=feeCalc(p,num(o.start),num(o.end),num(o.flows));
+  return`<form id="cmf" onsubmit="return false"><div class="field"><label>Месяц</label><input class="inp" type="month" name="period" value="${o.period}" data-cm="period"></div>
+  <div class="grid2"><div class="field"><label>Капитал на начало, $</label><input class="inp" inputmode="decimal" name="start" value="${o.start}" data-cm></div><div class="field"><label>Капитал на конец, $</label><input class="inp" inputmode="decimal" name="end" value="${o.end}" data-cm></div></div>
+  <div class="field"><label>Пополнения минус выводы за месяц, $</label><input class="inp" inputmode="decimal" name="flows" value="${o.flows}" data-cm></div>
+  <div id="cmPrev">${cmPreview(p,c)}</div>
+  <div class="btns"><button class="btn gold" data-a="saveMonth">Начислить</button></div></form>`;
+}
+function cmPreview(p,c){return`<div class="card"><div class="kv">
+  <span>Прибыль за месяц</span><span class="v ${cls(c.profit)}">${money(c.profit,{sign:true})} (${pct(c.ret,{sign:true})})</span>
+  <span>База для performance fee${p.fees.hwm?' (выше пика)':''}</span><span class="v">${money(c.base)}</span>
+  <span>Management fee (${nf(2).format(c.tier.mgmt)}%${p.fees.annual?' / 12':''})</span><span class="v">${money(c.mf)}</span>
+  <span>Performance fee (${nf(2).format(c.tier.perf)}%)</span><span class="v">${money(c.pf)}</span>
+  <span><b>К оплате</b></span><span class="v">${money(c.total)}</span></div></div>`}
+function reportText(p){
+  const L=ledger(p,S.prices);const m=metrics(p,L);const as=byAsset(L);
+  const last=p.feeRecs[p.feeRecs.length-1];
+  let t=`Отчёт по портфелю: ${p.name}\n${new Date().toLocaleDateString('ru-RU')}\n\nСтоимость: ${money(L.value)}\nВложено: ${money(L.net)}\nРезультат: ${money(L.pnl,{sign:true})} (${pct(m.totalRet,{sign:true})})\n`;
+  if(m.twr!=null)t+=`Доходность управления: ${pct(m.twr,{sign:true})}${m.btc!=null?`, BTC за период ${pct(m.btc,{sign:true})}`:''}\nМакс. просадка: ${pct(m.mdd)}\n`;
+  t+=`\nАктивы:\n${as.map(a=>`${a.asset}: ${qfmt(a.qty,a.asset)} (${money(a.value)})`).join('\n')}\n`;
+  const z=zones(L);t+=`\nЗона роста ${pct(z.t?z.g/z.t:0)}, зона стабильности ${pct(z.t?z.s/z.t:0)}\n`;
+  if(p.plan){t+=`Цель: ${money(p.plan.target)} в месяц, прогресс ${pct(m.progress,{dec:0})}\n`}
+  if(last)t+=`\nКомиссия за ${last.period}: ${money(last.mf+last.pf)} (management ${money(last.mf)}, performance ${money(last.pf)})${last.paid?', оплачено':''}\n`;
+  return t;
+}
+
+/* ===================== Настройки ===================== */
+function settingsHtml(){
+  const s=S.settings;
+  return`<div class="grid2"><div class="field"><label>Валюта учёта</label><select class="inp" data-set="currency">${Object.keys(CUR).map(c=>`<option ${c===s.currency?'selected':''}>${c}</option>`).join('')}</select></div>
+  <div class="field"><label>Курс: 1 USD = ? ${esc(s.currency)}</label><input class="inp" inputmode="decimal" data-fx value="${s.fx[s.currency]||(s.currency==='USD'?1:'')}" ${s.currency==='USD'?'readonly':''}></div></div>
+  <div class="grid2"><div class="field"><label>Доходность для проверки капитала, % годовых</label><input class="inp" inputmode="decimal" data-set="consRate" value="${s.consRate}"></div>
+  <div class="field"><label>Целевая доходность для расчёта капитала, %</label><input class="inp" inputmode="decimal" data-set="targetRate" value="${s.targetRate}"></div></div>
+  <div class="field"><label>Безрисковая ставка для Шарпа и Сортино, %</label><input class="inp" inputmode="decimal" data-set="riskFree" value="${s.riskFree}"></div>
+  <h3 style="margin:18px 0 8px">Курсы, $</h3><p class="small muted" style="margin-top:0">${S.pricesAt?`Обновлены ${new Date(S.pricesAt).toLocaleString('ru-RU')} (${S.pricesSrc==='live'?'CoinGecko':'вручную'}).`:'Ещё не обновлялись.'} Если автозагрузка недоступна, введите вручную.</p>
+  <div class="list">${Object.entries(S.assets).map(([k,a])=>`<div class="row"><div class="grow"><b>${esc(k)}</b> <span class="small muted">${esc(a.name)}${a.stable?', стейблкоин':''}</span>${S.chg[k]!=null?` <span class="small ${cls(S.chg[k])}">${pct(S.chg[k]/100,{sign:true})} за 24ч</span>`:''}</div><input class="inp" style="width:130px" inputmode="decimal" data-price="${k}" value="${S.prices[k]??''}" aria-label="Курс ${esc(k)}">${DEFAULT_ASSETS[k]?'':`<button class="icon-btn" data-a="delAsset" data-k="${k}" aria-label="Удалить актив">✕</button>`}</div>`).join('')}</div>
+  <div class="btns"><button class="btn" data-a="refresh">Загрузить курсы</button><button class="btn" data-a="addAsset">Добавить актив</button></div>
+  <h3 style="margin:22px 0 8px">Данные</h3>
+  <p class="small muted" style="margin-top:0">${dbRef?'Данные синхронизируются в облаке артефакта.':'Данные хранятся на этом устройстве. Делайте резервную копию.'}</p>
+  <div class="btns"><button class="btn" data-a="backup">Резервная копия</button><button class="btn" data-a="restore">Восстановить</button>${S.portfolios.some(x=>x.name.includes('пример'))?'':'<button class="btn" data-a="demo">Пример клиента</button>'}<button class="btn danger" data-a="reset">Стереть всё</button></div>`;
+}
+
+/* ===================== курсы ===================== */
+async function fetchT(url,ms){const c=new AbortController();const t=setTimeout(()=>c.abort(),ms||8000);try{const r=await fetch(url,{signal:c.signal});if(!r.ok)throw new Error(r.status);return await r.json()}finally{clearTimeout(t)}}
+async function refreshPrices(manual){
+  const ids=[...new Set(Object.values(S.assets).map(a=>a.cg).filter(Boolean))];
+  try{
+    const j=await fetchT(`https://api.coingecko.com/api/v3/simple/price?ids=${ids.join(',')}&vs_currencies=usd&include_24hr_change=true`);
+    for(const [k,a] of Object.entries(S.assets)){if(a.cg&&j[a.cg]&&j[a.cg].usd){S.prices[k]=j[a.cg].usd;S.chg[k]=j[a.cg].usd_24h_change}}
+    try{const vs=Object.values(CUR).map(c=>c.cg).filter(Boolean).join(',');const f=await fetchT(`https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=${vs}`);const u=f.tether.usd||1;for(const [c,d] of Object.entries(CUR)){if(d.cg&&f.tether[d.cg])S.settings.fx[c]=r2(f.tether[d.cg]/u*100)/100}}catch(e){}
+    S.pricesAt=Date.now();S.pricesSrc='live';save({silent:true});render();if(manual){toast('Курсы обновлены');haptic()}
+    if(!$('#sheet').hidden&&$('[data-price]'))openSettings();
+  }catch(e){if(manual)toast('Курсы не загрузились. Введите их вручную в настройках.')}
+}
+function openSettings(){openSheet('Настройки',settingsHtml())}
+
+/* ===================== пример ===================== */
+function loadDemo(){
+  if(!S.prices.BTC)S.prices.BTC=100000;if(!S.prices.ETH)S.prices.ETH=3500;
+  const p=newPortfolio('Алексей (пример)',false);p.contact='@alexey';
+  const L={ex:{id:uid(),name:'Bybit',kind:'Криптобиржа'},w:{id:uid(),name:'Ledger',kind:'Кошелёк'},aave:{id:uid(),name:'Aave',kind:'Лендинг'},opt:{id:uid(),name:'Deribit',kind:'Опционы'},bot:{id:uid(),name:'Грид-бот',kind:'Торговый бот'}};
+  p.locations=Object.values(L);
+  const N=12;const bNow=S.prices.BTC,eNow=S.prices.ETH;
+  const bp=i=>bNow*(0.6+0.4*i/N+0.08*Math.sin(i*1.3)),ep=i=>eNow*(0.75+0.25*i/N+0.12*Math.sin(i*1.1+1));
+  const d0=new Date();d0.setMonth(d0.getMonth()-N);
+  const dt=i=>{const d=new Date(d0);d.setMonth(d.getMonth()+i);return d.toISOString().slice(0,10)};
+  const add=t=>p.txs.push({id:uid(),...t});
+  add({type:'buy',date:dt(0),asset:'BTC',qty:12000/bp(0),price:bp(0),value:12000,loc:L.w.id});
+  add({type:'buy',date:dt(0),asset:'ETH',qty:3000/ep(0),price:ep(0),value:3000,loc:L.ex.id});
+  add({type:'buy',date:dt(0),asset:'USDT',qty:8000,price:1,value:8000,loc:L.aave.id});
+  add({type:'buy',date:dt(0),asset:'USDC',qty:4000,price:1,value:4000,loc:L.opt.id});
+  add({type:'buy',date:dt(0),asset:'USDT',qty:3000,price:1,value:3000,loc:L.bot.id});
+  for(let i=1;i<=N;i++){
+    if(i<N){add({type:'buy',date:dt(i),asset:'BTC',qty:800/bp(i),price:bp(i),value:800,loc:L.ex.id});add({type:'buy',date:dt(i),asset:'ETH',qty:200/ep(i),price:ep(i),value:200,loc:L.ex.id});add({type:'buy',date:dt(i),asset:'USDT',qty:1000,price:1,value:1000,loc:L.aave.id})}
+    add({type:'income',date:dt(i),asset:'USDT',qty:55+i*6,price:1,value:55+i*6,loc:L.aave.id,note:'проценты лендинга'});
+    add({type:'income',date:dt(i),asset:'USDC',qty:70+(i%3)*25,price:1,value:70+(i%3)*25,loc:L.opt.id,note:'премия за проданные путы'});
+    add({type:'income',date:dt(i),asset:'USDT',qty:30+(i%4)*12,price:1,value:30+(i%4)*12,loc:L.bot.id,note:'прибыль бота'});
+  }
+  add({type:'swap',date:dt(5),asset:'USDT',qty:2000,toAsset:'BTC',toQty:2000/bp(5),value:2000,loc:L.aave.id,toLoc:L.w.id,note:'докупка на просадке'});
+  add({type:'transfer',date:dt(6),asset:'BTC',qty:0.01,loc:L.ex.id,toLoc:L.w.id,fee:0.00002});
+  for(let i=0;i<=N;i++){const d=i===N?today():dt(i);const pr={...S.prices,BTC:i===N?bNow:bp(i),ETH:i===N?eNow:ep(i)};const l=ledger(p,pr,d);p.snaps.push({d,v:r2(l.value),f:r2(l.net),b:pr.BTC})}
+  p.plan={target:5000,capital:30000,dca:2000,withdraw:false,model:'hybrid',answers:[3,3,3,3,3],profile:'moderate',score:15,alloc:[{k:'BTC',pct:40},{k:'ETH',pct:10},{k:'STABLES',pct:50}]};
+  S.portfolios.push(p);S.activeId=p.id;TAB='home';save();closeSheet();toast('Открыт пример клиента');
+}
+
+/* ===================== события ===================== */
+const A={
+  tab:d=>{TAB=d.k;OPEN_ASSET=null;render();window.scrollTo(0,0)},
+  settings:()=>openSettings(),
+  closeSheet:()=>{closeSheet();render()},
+  refresh:()=>{toast('Загружаю курсы…');refreshPrices(true)},
+  wizard:()=>startWizard(),
+  demo:()=>loadDemo(),
+  openAsset:d=>{if(TAB!=='assets'){TAB='assets';OPEN_ASSET=d.k}else OPEN_ASSET=OPEN_ASSET===d.k?null:d.k;render()},
+  addTx:()=>openSheet('Новая операция',txForm({})),
+  editTx:d=>{const t=P().txs.find(x=>x.id===d.k);if(t)openSheet('Операция',txForm({...t}))},
+  saveTx:()=>{
+    const p=P();const o=readForm('#txf');const qty=num(o.qty);
+    if(!(qty>0))return toast('Укажите количество');
+    const loc=ensureLoc(p,o,'loc');if(!loc)return toast('Выберите или назовите площадку');
+    const t={id:o.id||uid(),type:o.type,date:o.date||today(),asset:o.asset,qty,loc,note:o.note||''};
+    if(['buy','sell','income'].includes(o.type)){const pr=num(o.price);if(!(pr>0))return toast('Укажите цену');t.price=pr;t.value=r2(pr*qty)}
+    if(o.type==='swap'){t.toAsset=o.toAsset;t.toQty=num(o.toQty);if(!(t.toQty>0))return toast('Укажите, сколько получено');t.toLoc=loc;t.value=num(o.value)||r2(t.toQty*(S.prices[t.toAsset]||0));if(!t.value)return toast('Укажите сумму сделки')}
+    if(o.type==='transfer'){const to=ensureLoc(p,o,'toLoc');if(!to)return toast('Куда переводим?');t.toLoc=to;t.fee=num(o.fee);t.value=0}
+    const i=p.txs.findIndex(x=>x.id===t.id);if(i>=0)p.txs[i]=t;else p.txs.push(t);
+    closeSheet();save();haptic();toast(i>=0?'Сохранено':'Операция добавлена');
+  },
+  delTx:async()=>{const p=P();const id=readForm('#txf').id;if(!await ask('Удалить операцию?'))return;p.txs=p.txs.filter(x=>x.id!==id);closeSheet();save();toast('Операция удалена')},
+  locations:()=>{const p=P();openSheet('Площадки',`${p.locations.length?`<div class="list">${p.locations.map(l=>`<div class="row"><input class="inp" data-loc="name" data-k="${l.id}" value="${esc(l.name)}" aria-label="Название"><select class="inp" style="width:150px" data-loc="kind" data-k="${l.id}">${LOC_KINDS.map(k=>`<option ${k===l.kind?'selected':''}>${k}</option>`).join('')}</select><button class="icon-btn" data-a="delLoc" data-k="${l.id}" aria-label="Удалить">✕</button></div>`).join('')}</div>`:'<p class="muted">Площадки появятся, когда вы добавите первую операцию.</p>'}
+    <div class="grid2" style="margin-top:14px"><input class="inp" id="nlName" placeholder="Новая площадка"><select class="inp" id="nlKind">${LOC_KINDS.map(k=>`<option>${k}</option>`).join('')}</select></div><div class="btns"><button class="btn" data-a="addLoc">Добавить площадку</button><button class="btn primary" data-a="closeSheet">Готово</button></div>`)},
+  addLoc:()=>{const n=$('#nlName').value.trim();if(!n)return;P().locations.push({id:uid(),name:n,kind:$('#nlKind').value});save({silent:true});A.locations()},
+  delLoc:d=>{const p=P();if(p.txs.some(t=>t.loc===d.k||t.toLoc===d.k))return toast('На площадке есть операции — сначала удалите их');p.locations=p.locations.filter(l=>l.id!==d.k);save({silent:true});A.locations()},
+  pick:d=>{S.activeId=d.k;save()},
+  newClient:()=>openSheet('Новый клиент',`<div class="field"><label>Имя</label><input class="inp" id="ncName" placeholder="Имя клиента"></div><div class="field"><label>Контакт</label><input class="inp" id="ncContact" placeholder="@username"></div><div class="btns"><button class="btn primary" data-a="createClient">Добавить и пройти опросник</button></div>`),
+  createClient:()=>{const n=$('#ncName').value.trim();if(!n)return toast('Введите имя');const p=newPortfolio(n,false);p.contact=$('#ncContact').value.trim();S.portfolios.push(p);S.activeId=p.id;closeSheet();save({silent:true});startWizard()},
+  delClient:async()=>{const p=P();if(p.owner||!await ask(`Удалить клиента «${p.name}» и все его данные?`))return;S.portfolios=S.portfolios.filter(x=>x.id!==p.id);S.activeId='me';save();toast('Клиент удалён')},
+  feeCfg:()=>openSheet('Ставки и уровни',feeCfgHtml(P())),
+  tierAdd:()=>{const p=P();const last=p.fees.tiers[p.fees.tiers.length-1];p.fees.tiers.push({from:(last.from||0)+100000,mgmt:last.mgmt,perf:last.perf});save({silent:true});openSheet('Ставки и уровни',feeCfgHtml(p))},
+  tierDel:d=>{const p=P();p.fees.tiers.splice(+d.i,1);save({silent:true});openSheet('Ставки и уровни',feeCfgHtml(p))},
+  closeMonth:()=>{const p=P();const ym=today().slice(0,7);openSheet('Комиссия за месяц',closeMonthHtml(p,{period:ym,...monthDefaults(p,ym)}))},
+  saveMonth:async()=>{const p=P();const o=readForm('#cmf');if(p.feeRecs.some(r=>r.period===o.period)&&!await ask('За этот месяц уже есть начисление. Добавить ещё одно?','Добавить'))return;
+    const c=feeCalc(p,num(o.start),num(o.end),num(o.flows));
+    p.feeRecs.push({id:uid(),period:o.period,start:num(o.start),end:num(o.end),flows:num(o.flows),profit:r2(c.profit),mf:r2(c.mf),pf:r2(c.pf),mgmtRate:c.tier.mgmt,perfRate:c.tier.perf,hwmBefore:p.hwm,paid:false});
+    p.feeRecs.sort((a,b)=>a.period<b.period?-1:1);if(p.fees.hwm)p.hwm=r2(c.newHwm);closeSheet();save();haptic();toast('Комиссия начислена')},
+  togglePaid:d=>{const r=P().feeRecs.find(x=>x.id===d.k);if(r){r.paid=!r.paid;save()}},
+  delFee:async d=>{const p=P();const r=p.feeRecs.find(x=>x.id===d.k);if(!r||!await ask(`Удалить начисление за ${r.period}?`))return;if(p.feeRecs[p.feeRecs.length-1]===r)p.hwm=r.hwmBefore??null;p.feeRecs=p.feeRecs.filter(x=>x!==r);save()},
+  report:()=>{const t=reportText(P());openSheet('Отчёт клиенту',`<textarea class="inp" id="rep" style="min-height:260px;font-size:14px">${esc(t)}</textarea><div class="btns"><button class="btn primary" data-a="copyRep">Скопировать</button>${inTG?'<button class="btn" data-a="shareRep">Отправить в Telegram</button>':''}</div>`)},
+  copyRep:()=>copy($('#rep').value),
+  shareRep:()=>{tg.openTelegramLink('https://t.me/share/url?url='+encodeURIComponent(' ')+'&text='+encodeURIComponent($('#rep').value))},
+  addAsset:()=>openSheet('Новый актив',`<div class="grid2"><div class="field"><label>Тикер</label><input class="inp" id="naSym" placeholder="ARB"></div><div class="field"><label>Название</label><input class="inp" id="naName" placeholder="Arbitrum"></div></div><div class="field"><label>ID на CoinGecko для автокурса</label><input class="inp" id="naCg" placeholder="arbitrum (необязательно)"></div><div class="field"><label>Курс, $</label><input class="inp" id="naPr" inputmode="decimal"></div><div class="field"><label>Зона</label><select class="inp" id="naSt"><option value="0">Зона роста</option><option value="1">Стейблкоин, зона стабильности</option></select></div><div class="btns"><button class="btn primary" data-a="saveAsset">Добавить</button></div>`),
+  saveAsset:()=>{const k=$('#naSym').value.trim().toUpperCase();if(!k)return toast('Введите тикер');S.assets[k]={name:$('#naName').value.trim()||k,cg:$('#naCg').value.trim()||null,stable:$('#naSt').value==='1'};const pr=num($('#naPr').value);if(pr)S.prices[k]=pr;save({silent:true});openSettings();if(S.assets[k].cg)refreshPrices()},
+  delAsset:d=>{if(S.portfolios.some(p=>p.txs.some(t=>t.asset===d.k||t.toAsset===d.k)))return toast('Актив используется в операциях');delete S.assets[d.k];delete S.prices[d.k];save({silent:true});openSettings()},
+  backup:()=>openSheet('Резервная копия',`<p class="small muted">Скопируйте текст и сохраните в «Избранное» Telegram или в файл.</p><textarea class="inp" id="bk" readonly>${esc(JSON.stringify(S))}</textarea><div class="btns"><button class="btn primary" data-a="copyBk">Скопировать</button></div>`),
+  copyBk:()=>copy($('#bk').value),
+  restore:()=>openSheet('Восстановить',`<p class="small muted">Вставьте текст резервной копии. Текущие данные будут заменены.</p><textarea class="inp" id="rs"></textarea><div class="btns"><button class="btn primary" data-a="doRestore">Восстановить</button></div>`),
+  doRestore:()=>{try{const s=JSON.parse($('#rs').value);if(!s.portfolios)throw 0;S=migrate(s);closeSheet();save();toast('Данные восстановлены')}catch(e){toast('Это не похоже на резервную копию')}},
+  reset:async()=>{if(!await ask('Стереть все портфели, клиентов и операции?','Стереть'))return;S=defaultState();closeSheet();save();toast('Всё стёрто')},
+  wset:d=>{W.d[d.k]=d.k==='withdraw'?d.v==='1':d.v;if(d.k==='model')W.resetAlloc=true;render()},
+  wans:d=>{W.d.answers[+d.k]=+d.v;W.resetAlloc=true;render()},
+  wnext:()=>{if(W.step===0&&!(W.d.target>0))return toast('Укажите желаемую сумму в месяц');if(W.step===1)W.resetAlloc=true;W.step++;render();window.scrollTo(0,0)},
+  wback:()=>{W.step--;render();window.scrollTo(0,0)},
+  wcancel:()=>{W=null;TAB='home';render()},
+  alAdd:()=>{const al=W?W.d.alloc:P().plan.alloc;al.push({k:'SOL',pct:0});W?render():A.editAlloc()},
+  alDel:d=>{const al=W?W.d.alloc:P().plan.alloc;al.splice(+d.i,1);W?render():A.editAlloc()},
+  wfinish:()=>{const d=W.d;const sum=d.alloc.reduce((s,a)=>s+num(a.pct),0);if(Math.abs(sum-100)>0.01)return toast('Сумма долей должна быть 100%');
+    const p=P();p.plan={target:num(d.target),capital:num(d.capital),dca:num(d.dca),withdraw:!!d.withdraw,model:d.model,answers:d.answers,profile:d.profile,score:d.score,alloc:d.alloc.map(a=>({k:a.k,pct:num(a.pct)}))};W=null;TAB='home';save();haptic();toast('Стратегия сохранена')},
+  editAlloc:()=>{const p=P();openSheet('Пропорции активов',`${allocEditor(p.plan.alloc)}<div class="btns"><button class="btn primary" data-a="saveAlloc">Сохранить</button></div>`)},
+  saveAlloc:()=>{const p=P();const sum=p.plan.alloc.reduce((s,a)=>s+num(a.pct),0);if(Math.abs(sum-100)>0.01)return toast('Сумма долей должна быть 100%');closeSheet();save();toast('Пропорции сохранены')}
+};
+let ASK=null;
+function ask(msg,yes){return new Promise(res=>{ASK=res;openSheet('Подтвердите',`<p>${esc(msg)}</p><div class="btns"><button class="btn danger" data-a="askYes">${yes||'Удалить'}</button><button class="btn" data-a="askNo">Отмена</button></div>`)})}
+A.askYes=()=>{closeSheet();const r=ASK;ASK=null;r&&r(true)};
+A.askNo=()=>{closeSheet();const r=ASK;ASK=null;render();r&&r(false)};
+function copy(t){(navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(()=>toast('Скопировано')).catch(()=>{const ta=document.querySelector('#sheet textarea');if(ta){ta.select();try{document.execCommand('copy');toast('Скопировано')}catch(e){toast('Выделите текст и скопируйте вручную')}}})}
+
+document.addEventListener('click',e=>{const el=e.target.closest('[data-a]');if(!el||el.disabled)return;e.preventDefault();const f=A[el.dataset.a];if(f)f(el.dataset,el)});
+$('#sheet').addEventListener('click',e=>{if(e.target.id==='sheet')A.closeSheet()});
+$('#pfSel').addEventListener('change',e=>{if(e.target.value==='__new'){render();A.newClient()}else{S.activeId=e.target.value;W=null;save()}});
+document.addEventListener('change',e=>{
+  const el=e.target;const p=P();
+  if(el.dataset.w!==undefined){W.d[el.dataset.w]=num(el.value);render();return}
+  if(el.dataset.al){const al=W?W.d.alloc:p.plan.alloc;const a=al[+el.dataset.i];if(el.dataset.al==='k')a.k=el.value;else a.pct=num(el.value);if(W)render();else{save({silent:true});A.editAlloc()}return}
+  if(el.dataset.rerender!==undefined){const o=readForm('#txf');if(el.name==='asset'){o.price=S.prices[o.asset]||''}openSheet(o.id?'Операция':'Новая операция',txForm(o));return}
+  if(el.dataset.newsel){const box=document.querySelector(`[data-newloc="${el.dataset.newsel}"]`);if(box)box.hidden=el.value!=='__new';return}
+  if(el.dataset.pf){p[el.dataset.pf]=el.value;save();return}
+  if(el.dataset.tier){p.fees.tiers[+el.dataset.i][el.dataset.tier]=num(el.value);save({silent:true});return}
+  if(el.dataset.fee){const k=el.dataset.fee;p.fees[k]=k==='mode'?el.value:el.value==='1';save({silent:true});return}
+  if(el.dataset.loc){const l=p.locations.find(x=>x.id===el.dataset.k);if(l){l[el.dataset.loc]=el.value;save({silent:true})}return}
+  if(el.dataset.set){const k=el.dataset.set;S.settings[k]=k==='currency'?el.value:num(el.value);save({silent:true});if(k==='currency')openSettings();return}
+  if(el.dataset.fx!==undefined){S.settings.fx[S.settings.currency]=num(el.value);save({silent:true});return}
+  if(el.dataset.price){S.prices[el.dataset.price]=num(el.value)||0;S.pricesSrc='manual';S.pricesAt=Date.now();save({silent:true});return}
+});
+document.addEventListener('input',e=>{
+  const el=e.target;
+  if(el.dataset.w!==undefined&&W&&W.step===0){W.d[el.dataset.w]=num(el.value);const c=$('#wcalc');if(c)c.innerHTML=wizCalc(W.d,planCalc(W.d))}
+  if(el.dataset.cm!==undefined){const p=P();const f=$('#cmf');if(el.dataset.cm==='period'){const o={period:el.value,...monthDefaults(p,el.value)};['start','end','flows'].forEach(k=>f.elements[k].value=o[k])}
+    const o=readForm('#cmf');$('#cmPrev').innerHTML=cmPreview(p,feeCalc(p,num(o.start),num(o.end),num(o.flows)))}
+});
+
+/* ===================== запуск ===================== */
+(function boot(){
+  const local=loadLocal();if(local)S=migrate(local);
+  if(inTG){try{tg.ready();tg.expand();const apply=()=>{document.documentElement.dataset.theme=tg.colorScheme==='dark'?'dark':'light'};apply();tg.onEvent('themeChanged',apply)}catch(e){}}
+  if(!local){startWizard()}else render();
+  refreshPrices(false);
+  initCloud();
+  setInterval(()=>refreshPrices(false),5*60*1000);
+})();
+</script>
+</body>
+</html>
