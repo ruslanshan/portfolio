@@ -11,7 +11,7 @@
 <style>
 :root{
   --bg:#ECEFEA;--surface:#FAFBF8;--sunk:#E1E6DF;--ink:#14221D;--muted:#5A6862;--line:#CDD5CE;
-  --gold:#A96D14;--gold-soft:#EFDDBB;--teal:#1F7266;--teal-soft:#C9E3DD;--up:#277547;--down:#AE3A32;
+  --gold:#A96D14;--gold-soft:#EFDDBB;--teal:#1F7266;--teal-soft:#C9E3DD;--yld:#4A5FA8;--up:#277547;--down:#AE3A32;
   --f:'Onest',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
   --fd:'Unbounded','Onest',system-ui,sans-serif;
   box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
@@ -19,10 +19,10 @@
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
   --bg:#0F1916;--surface:#16221E;--sunk:#1D2B26;--ink:#E4ECE6;--muted:#8FA098;--line:#2A3A34;
-  --gold:#E2A640;--gold-soft:#3B2F19;--teal:#52B5A5;--teal-soft:#183A34;--up:#5DC48B;--down:#E7786E;color-scheme:dark}}
+  --gold:#E2A640;--gold-soft:#3B2F19;--teal:#52B5A5;--teal-soft:#183A34;--yld:#8EA2EA;--up:#5DC48B;--down:#E7786E;color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#0F1916;--surface:#16221E;--sunk:#1D2B26;--ink:#E4ECE6;--muted:#8FA098;--line:#2A3A34;
-  --gold:#E2A640;--gold-soft:#3B2F19;--teal:#52B5A5;--teal-soft:#183A34;--up:#5DC48B;--down:#E7786E;color-scheme:dark}
+  --gold:#E2A640;--gold-soft:#3B2F19;--teal:#52B5A5;--teal-soft:#183A34;--yld:#8EA2EA;--up:#5DC48B;--down:#E7786E;color-scheme:dark}
 *,*::before,*::after{box-sizing:inherit}
 html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
 body{margin:0;min-height:100%;background:var(--bg);color:var(--ink);font:15px/1.45 var(--f);-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}
@@ -50,9 +50,9 @@ h3{font-size:15px}
 .hero .pl{display:flex;gap:14px;flex-wrap:wrap;font-size:14px}
 .zonebar{margin:20px 0 4px}
 .zonebar .bar{position:relative;display:flex;height:34px;border-radius:8px;overflow:hidden;background:var(--sunk)}
-.zonebar .g{background:var(--gold)}.zonebar .s{background:var(--teal)}
+.zonebar .g{background:var(--gold)}.zonebar .y{background:var(--yld)}.zonebar .s{background:var(--teal)}
 .zonebar .tick{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--ink)}
-.zonebar .legend{display:flex;justify-content:space-between;margin-top:8px;font-size:13px;gap:10px}
+.zonebar .legend{display:grid;grid-template-columns:repeat(3,1fr);margin-top:8px;font-size:13px;gap:10px;line-height:1.35}
 .zonebar .legend b{font-weight:600}
 .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:1px}
 .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
@@ -144,8 +144,10 @@ table.t td.n,table.t th.n{text-align:right;white-space:nowrap}
 
 <script>
 /* ===================== версия ===================== */
-const APP_VERSION='1.1.0';
+const APP_VERSION='1.3.0';
 const CHANGELOG=[
+ {v:'1.3.0',d:'23.09.2026',items:['Третья зона капитала – зона доходности: опционы, covered call, лендинг, боты','Свои позиции, которых нет на CoinGecko: опционные конструкции, маржинальный буфер, золото, кэш-резерв','Позиции можно вести в долларах или в штуках по своей цене','Новая операция «Переоценка» – обновить текущую стоимость своей позиции','Метрика доходности зоны доходности в «Метриках»']},
+ {v:'1.2.0',d:'23.09.2026',items:['Поиск монеты по тикеру или названию – без ручного ввода ID с CoinGecko','Курс новой монеты подтягивается сразу, стейблкоины определяются автоматически','Любой актив можно убрать из списка, если он не используется в операциях и стратегиях','Зону актива (рост или стабильность) можно переключить в настройках']},
  {v:'1.1.0',d:'23.09.2026',items:['Резервная копия файлом в чат с ботом и восстановление из этого файла','Плановая и внеплановая ребалансировка: продажа выросшего актива и покупка просевшего','Подсказка, куда направить ежемесячный взнос, чтобы выровнять пропорции','Версия приложения в настройках и окно «Что нового»','Исправлено наложение полей в форме операции на iPhone']},
  {v:'1.0.0',d:'23.09.2026',items:['Первая версия: стратегия, учёт активов по площадкам, клиенты и комиссии, метрики эффективности']}
 ];
@@ -162,7 +164,7 @@ const haptic=t=>{try{tg&&tg.HapticFeedback&&tg.HapticFeedback.notificationOccurr
 
 const CUR={USD:{sym:'$',pre:1,cg:'usd'},EUR:{sym:'€',pre:1,cg:'eur'},RUB:{sym:'₽',pre:0,cg:'rub'},BYN:{sym:'Br',pre:0,cg:null},UAH:{sym:'₴',pre:0,cg:'uah'},KZT:{sym:'₸',pre:0,cg:'kzt'},PLN:{sym:'zł',pre:0,cg:'pln'},GBP:{sym:'£',pre:1,cg:'gbp'}};
 const LOC_KINDS=['Криптобиржа','Кошелёк','DeFi-протокол','Лендинг','Опционы','Торговый бот','Стейкинг','Другое'];
-const TX_TYPES={buy:'Покупка / пополнение',sell:'Продажа / вывод',swap:'Обмен',income:'Доход',transfer:'Перевод между площадками'};
+const TX_TYPES={buy:'Покупка / пополнение',sell:'Продажа / вывод',swap:'Обмен',income:'Доход',transfer:'Перевод между площадками',revalue:'Переоценка своей позиции'};
 const MODELS={growth:{t:'Рост капитала',d:'Всё реинвестируется, цель – увеличить капитал до нужного размера.'},cashflow:{t:'Cashflow',d:'Капитал уже работает на ежемесячный вывод в реальную жизнь.'},hybrid:{t:'Гибрид',d:'Капитал растёт, а часть дохода выводится в жизнь.'}};
 const PROFILES={conservative:{t:'Консервативный',a:{BTC:20,ETH:5,STABLES:75}},moderate:{t:'Умеренный',a:{BTC:40,ETH:10,STABLES:50}},aggressive:{t:'Агрессивный',a:{BTC:55,ETH:20,STABLES:25}}};
 const RISK_Q=[
@@ -182,7 +184,7 @@ function newPortfolio(name,owner){return{id:owner?'me':uid(),name,owner:!!owner,
   fees:{tiers:[{from:0,mgmt:3,perf:30},{from:100000,mgmt:2,perf:20}],annual:true,mode:'flat',hwm:true},
   rebal:{freq:'quarter',band:5,last:null,log:[]},
   hwm:null,locations:[],txs:[],snaps:[],feeRecs:[]}}
-function defaultState(){return{v:1,savedAt:0,settings:{currency:'USD',fx:{USD:1},consRate:10,targetRate:15,riskFree:4,api:''},seenVersion:null,
+function defaultState(){return{v:1,savedAt:0,settings:{currency:'USD',fx:{USD:1},consRate:10,targetRate:15,riskFree:4,api:''},seenVersion:null,removedAssets:[],
   assets:JSON.parse(JSON.stringify(DEFAULT_ASSETS)),prices:{USDT:1,USDC:1},chg:{},pricesAt:null,pricesSrc:'manual',
   portfolios:[newPortfolio('Мой портфель',true)],activeId:'me'}}
 
@@ -195,7 +197,7 @@ let OPEN_ASSET=null;
 const LS_KEY='kapital.v1';
 let dbRef=null,dbTimer=null;
 function loadLocal(){try{const j=localStorage.getItem(LS_KEY);if(j)return JSON.parse(j)}catch(e){}return null}
-function migrate(s){const d=defaultState();s.settings={...d.settings,...(s.settings||{})};s.assets={...d.assets,...(s.assets||{})};s.prices={...d.prices,...(s.prices||{})};s.chg=s.chg||{};
+function migrate(s){const d=defaultState();s.settings={...d.settings,...(s.settings||{})};s.removedAssets=s.removedAssets||[];const defs={};for(const k in d.assets)if(!s.removedAssets.includes(k))defs[k]=d.assets[k];s.assets={...defs,...(s.assets||{})};s.prices={...d.prices,...(s.prices||{})};s.chg=s.chg||{};
   (s.portfolios||[]).forEach(p=>{const n=newPortfolio(p.name,p.owner);for(const k in n)if(p[k]===undefined)p[k]=n[k]});
   if(!s.portfolios||!s.portfolios.length)s.portfolios=d.portfolios;if(!s.portfolios.find(p=>p.id===s.activeId))s.activeId=s.portfolios[0].id;return s}
 function save(opts){
@@ -223,7 +225,14 @@ const rate=()=>S.settings.fx[cur()]||1;
 function money(usd,o={}){if(usd==null||!isFinite(usd))return'–';let v=usd*rate();if(Math.abs(v)<0.005)v=0;const d=o.dec??(Math.abs(v)>=1000?0:2);const s=nf(d).format(Math.abs(v));const c=CUR[cur()]||CUR.USD;const pre=v<0?'−':(o.sign&&v>0?'+':'');return pre+(c.pre?c.sym+s:s+' '+c.sym)}
 function usd(v,dec){return'$'+nf(dec??(Math.abs(v)>=1000?0:2)).format(v)}
 function pct(x,o={}){if(x==null||!isFinite(x))return'–';const pre=x<0?'−':(o.sign&&x>0?'+':'');return pre+nf(o.dec??1).format(Math.abs(x*100))+'%'}
-function qfmt(q,a){const st=S.assets[a]&&S.assets[a].stable;const d=st?2:(Math.abs(q)<10?6:3);return new Intl.NumberFormat('ru-RU',{maximumFractionDigits:d}).format(q)}
+const ZONES={growth:{t:'Рост',full:'Зона роста',c:'var(--gold)'},yield:{t:'Доходность',full:'Зона доходности',c:'var(--yld)'},stable:{t:'Стабильность',full:'Зона стабильности',c:'var(--teal)'}};
+const ZORDER=['growth','yield','stable'];
+const aZone=a=>{const x=S.assets[a];return x?(x.zone||(x.stable?'stable':'growth')):'growth'};
+const keyZone=k=>k==='STABLES'?'stable':k==='OTHER'?'growth':aZone(k);
+const isUsdA=a=>!!(S.assets[a]&&S.assets[a].kind==='usd');
+const aq=(q,a)=>esc(isUsdA(a)?usd(q)+' '+a:qfmt(q,a)+' '+a);
+const cleanName=n=>String(n||'').replace(/["'<>&`\\|]/g,'').replace(/\s+/g,' ').trim().slice(0,48);
+function qfmt(q,a){const st=S.assets[a]&&(S.assets[a].stable||S.assets[a].kind==='usd');const d=st?2:(Math.abs(q)<10?6:3);return new Intl.NumberFormat('ru-RU',{maximumFractionDigits:d}).format(q)}
 const cls=x=>x>0.004?'up':x<-0.004?'down':'';
 const P=()=>S.portfolios.find(p=>p.id===S.activeId)||S.portfolios[0];
 const ymd=d=>d.slice(0,7);
@@ -242,16 +251,18 @@ function ledger(p,prices,until){
     else if(t.type==='sell'){const c=rm(t.asset,t.loc,num(t.qty));realized+=v-c;outflow+=v}
     else if(t.type==='swap'){const c=rm(t.asset,t.loc,num(t.qty));add(t.toAsset,t.toLoc||t.loc,num(t.toQty),v);realized+=v-c}
     else if(t.type==='transfer'){const c=rm(t.asset,t.loc,num(t.qty));add(t.asset,t.toLoc,num(t.qty)-num(t.fee),c)}
+    else if(t.type==='revalue'){const k=key(t.asset,t.loc);const x=pos[k]||(pos[k]={asset:t.asset,loc:t.loc,qty:0,cost:0});x.qty=num(t.value)}
   }
   let value=0,missing=[];
-  const list=Object.values(pos).filter(x=>Math.abs(x.qty)>1e-12).map(x=>{const pr=prices[x.asset];if(!pr)missing.push(x.asset);const val=x.qty*(pr||0);value+=val;return{...x,price:pr||0,value:val,pnl:val-x.cost}});
+  const list=Object.values(pos).filter(x=>Math.abs(x.qty)>1e-12).map(x=>{const pr=isUsdA(x.asset)?1:prices[x.asset];if(!pr)missing.push(x.asset);const val=x.qty*(pr||0);value+=val;return{...x,price:pr||0,value:val,pnl:val-x.cost}});
   return{pos:list,inflow,outflow,income,realized,value,net:inflow-outflow,pnl:value+outflow-inflow,missing:[...new Set(missing)]};
 }
 function byAsset(L){const m={};L.pos.forEach(x=>{const a=m[x.asset]=m[x.asset]||{asset:x.asset,qty:0,value:0,cost:0,locs:[]};a.qty+=x.qty;a.value+=x.value;a.cost+=x.cost;a.locs.push(x)});return Object.values(m).sort((a,b)=>b.value-a.value)}
 function byLoc(p,L){const m={};L.pos.forEach(x=>{const l=m[x.loc]=m[x.loc]||{loc:x.loc,value:0,items:[]};l.value+=x.value;l.items.push(x)});return Object.values(m).sort((a,b)=>b.value-a.value)}
 const locName=(p,id)=>{const l=p.locations.find(l=>l.id===id);return l?l.name:'Без площадки'};
 const locKind=(p,id)=>{const l=p.locations.find(l=>l.id===id);return l?l.kind:''};
-function zones(L){let g=0,s=0;L.pos.forEach(x=>{if(S.assets[x.asset]&&S.assets[x.asset].stable)s+=x.value;else g+=x.value});return{g,s,t:g+s}}
+function zones(L){const o={g:0,y:0,s:0};L.pos.forEach(x=>{const z=aZone(x.asset);o[z==='stable'?'s':z==='yield'?'y':'g']+=x.value});o.t=o.g+o.y+o.s;return o}
+function planZones(pl){const o={growth:0,yield:0,stable:0};pl.alloc.forEach(a=>o[keyZone(a.k)]+=num(a.pct)/100);return o}
 function allocKey(plan,asset){if(plan&&plan.alloc.some(a=>a.k===asset))return asset;if(S.assets[asset]&&S.assets[asset].stable)return'STABLES';return plan?'OTHER':asset}
 const keyName=k=>k==='STABLES'?'USDT/USDC':k==='OTHER'?'Прочее':k;
 
@@ -268,7 +279,8 @@ function metrics(p,L){
   const sn=p.snaps.filter(s=>s.v>0).slice().sort((a,b)=>a.d<b.d?-1:1);
   const m={points:sn.length};
   m.totalRet=L.inflow>0?L.pnl/L.inflow:null;
-  const z=zones(L);m.stableShare=z.t?z.s/z.t:null;
+  const z=zones(L);m.stableShare=z.t?z.s/z.t:null;m.yieldShare=z.t?z.y/z.t:null;
+  {const sinceY=new Date(Date.now()-30*864e5).toISOString().slice(0,10);const incY=p.txs.filter(t=>t.type==='income'&&t.date>=sinceY&&aZone(t.asset)==='yield').reduce((a,t)=>a+num(t.value),0);m.yieldInc=incY;m.yieldApr=z.y>0?incY*12/z.y:null}
   const locs=byLoc(p,L);m.maxLoc=z.t&&locs.length?locs[0].value/z.t:null;m.maxLocName=locs.length?locName(p,locs[0].loc):'';
   const since=new Date(Date.now()-30*864e5).toISOString().slice(0,10);
   const inc30=p.txs.filter(t=>t.type==='income'&&t.date>=since).reduce((s,t)=>s+num(t.value),0);
@@ -334,7 +346,7 @@ function suggestAlloc(profile,model){
   const btc=Math.round((a.BTC-shift*a.BTC/g)),eth=Math.round(a.ETH-shift*a.ETH/g);
   return[{k:'BTC',pct:btc},{k:'ETH',pct:eth},{k:'STABLES',pct:100-btc-eth}];
 }
-function isStableKey(k){return k==='STABLES'||(S.assets[k]&&S.assets[k].stable)}
+function isStableKey(k){return keyZone(k)==='stable'}
 
 /* ===================== ребалансировка ===================== */
 const FREQ={none:'Не проводить',month:'Ежемесячно',quarter:'Раз в квартал',half:'Раз в полгода',year:'Раз в год'};
@@ -406,6 +418,39 @@ function rebalSheet(p){
   <div class="btns"><button class="btn gold" data-a="rebalApply">Записать сделки</button></div>`;
 }
 
+/* ===================== поиск монет ===================== */
+const STABLE_SYMS=['USDT','USDC','DAI','USDE','FDUSD','TUSD','PYUSD','USDS','USD1','RLUSD','BUSD','FRAX','GHO','USD0','USDD','USDP','LUSD','CRVUSD','EURC','EURT','USDG','USDTB','SUSDE','USDY'];
+const guessStable=(sym,name)=>STABLE_SYMS.includes(sym)||(/usd|eur/i.test(sym)&&/dollar|usd|euro|stable/i.test(name));
+let SEARCH_T=null,SEARCH_Q='',ADD_RET='settings';
+let ADD_TAB='coin',CU={name:'',zone:'yield',kind:'usd',price:''};
+function addAssetHtml(){
+  const tabs=`<div class="seg" style="margin-bottom:14px"><button class="opt" style="flex-basis:120px;text-align:center" data-a="addTab" data-k="coin" aria-pressed="${ADD_TAB==='coin'}"><b style="margin:0">Монета</b></button><button class="opt" style="flex-basis:120px;text-align:center" data-a="addTab" data-k="custom" aria-pressed="${ADD_TAB==='custom'}"><b style="margin:0">Своя позиция</b></button></div>`;
+  if(ADD_TAB==='custom')return tabs+`<p class="small muted" style="margin-top:0">Для того, чего нет на CoinGecko: опционные конструкции, маржинальный буфер под covered call, золото, внешний кэш-резерв, торговый бот.</p>
+  <div class="field"><label>Название</label><input class="inp" id="cuName" value="${esc(CU.name)}" placeholder="Опционные конструкции"></div>
+  <div class="field"><label>Зона</label><select class="inp" id="cuZone">${ZORDER.map(z=>`<option value="${z}" ${z===CU.zone?'selected':''}>${ZONES[z].full}</option>`).join('')}</select></div>
+  <div class="lbl" style="margin-bottom:6px">Как считать стоимость</div>
+  <div class="seg"><button class="opt" data-a="cuKind" data-k="usd" aria-pressed="${CU.kind==='usd'}"><b>В долларах</b><span class="small">Вносите сумму, а текущую стоимость обновляете операцией «Переоценка». Для опционов, маржи, кэша, ботов.</span></button><button class="opt" data-a="cuKind" data-k="unit" aria-pressed="${CU.kind==='unit'}"><b>Штуки × цена</b><span class="small">Своя цена за единицу, меняете её в настройках. Для золота в унциях, акций, токенов вне CoinGecko.</span></button></div>
+  ${CU.kind==='unit'?`<div class="field" style="margin-top:12px"><label>Цена за 1, $</label><input class="inp" id="cuPrice" inputmode="decimal" value="${esc(CU.price)}"></div>`:''}
+  <div class="btns"><button class="btn primary" data-a="saveCustom">Добавить позицию</button></div>
+  <p class="small muted">Токенизированное золото (PAXG, XAUT) есть на CoinGecko – его удобнее найти во вкладке «Монета», тогда курс будет обновляться сам.</p>`;
+  return tabs+`<div class="field"><label>Найти монету</label><input class="inp" id="srQ" type="search" placeholder="Тикер или название, например HYPE" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="search"></div>
+  <div id="srRes"><p class="small muted" style="margin:0">Начните вводить – покажу монеты с CoinGecko, самые крупные сверху. Курс подтянется автоматически.</p></div>
+  <p class="small muted">Нет в поиске? Добавьте во вкладке «Своя позиция».</p>`;
+}
+async function searchCoins(q){
+  const el=$('#srRes');if(!el)return;
+  if(q.length<2){el.innerHTML='<p class="small muted" style="margin:0">Введите хотя бы 2 символа.</p>';return}
+  el.innerHTML='<p class="small muted" style="margin:0">Ищу…</p>';
+  try{
+    const j=await fetchT('https://api.coingecko.com/api/v3/search?query='+encodeURIComponent(q),8000);
+    if(q!==SEARCH_Q||!$('#srRes'))return;
+    const coins=(j.coins||[]).slice(0,15);
+    if(!coins.length){el.innerHTML='<p class="small muted" style="margin:0">Ничего не нашлось. Проверьте написание или добавьте во вкладке «Своя позиция».</p>';return}
+    el.innerHTML=`<div class="list">${coins.map(c=>{const have=Object.entries(S.assets).find(([,a])=>a.cg===c.id);return`<button class="row btnrow" data-a="pickCoin" data-id="${esc(c.id)}" data-sym="${esc(c.symbol)}" data-name="${esc(c.name)}" ${have?'disabled style="opacity:.55;cursor:default"':''}><img src="${esc(c.thumb||'')}" width="28" height="28" alt="" style="border-radius:50%;flex:none;background:var(--sunk)" onerror="this.style.visibility='hidden'"><div class="grow"><b>${esc(String(c.symbol).toUpperCase())}</b> <span class="muted">${esc(c.name)}</span></div><div class="r small muted">${have?'уже добавлен':c.market_cap_rank?'#'+c.market_cap_rank:''}</div></button>`}).join('')}</div><p class="small muted">Номер справа – место по капитализации. Если у нескольких монет одинаковый тикер, берите ту, что выше.</p>`;
+  }catch(e){if($('#srRes'))el.innerHTML='<p class="small" style="margin:0">Поиск сейчас недоступен – нет связи с CoinGecko. Можно добавить во вкладке «Своя позиция».</p>'}
+}
+function afterAssetAdded(){if(ADD_RET==='wizard'){closeSheet();render()}else if(ADD_RET==='alloc'){A.editAlloc()}else openSettings()}
+
 /* ===================== резервная копия ===================== */
 const backupName=()=>`rantie-backup-${today()}.json`;
 const backupJson=()=>JSON.stringify({app:'rantie',version:APP_VERSION,exportedAt:new Date().toISOString(),data:S});
@@ -462,23 +507,23 @@ function vHome(){
     <button class="btn primary block" data-a="wizard">Пройти опросник</button>
     <div class="btns" style="justify-content:center"><button class="btn" data-a="addTx">Сразу добавить активы</button>${S.portfolios.some(x=>x.name.includes('пример'))?'':'<button class="btn" data-a="demo">Открыть пример клиента</button>'}</div></div>`;
   }
-  const z=zones(L);const g=z.t?z.g/z.t:0;
-  const tgtG=p.plan?p.plan.alloc.filter(a=>!isStableKey(a.k)).reduce((s,a)=>s+a.pct,0)/100:null;
+  const z=zones(L);const sh={growth:z.t?z.g/z.t:0,yield:z.t?z.y/z.t:0,stable:z.t?z.s/z.t:0};const zv={growth:z.g,yield:z.y,stable:z.s};
+  const tz=p.plan?planZones(p.plan):null;
   const assets=byAsset(L);const locs=byLoc(p,L);
   const pnlPct=L.inflow>0?L.pnl/L.inflow:null;
   let h=`<section class="hero"><div class="who">${esc(p.name)}${S.pricesAt?`, курсы ${new Date(S.pricesAt).toLocaleString('ru-RU',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}`:''}</div>
   <div class="big">${money(L.value)}</div>
   <div class="pl"><span class="${cls(L.pnl)}">${money(L.pnl,{sign:true})} (${pct(pnlPct,{sign:true})})</span><span class="muted">вложено ${money(L.net)}</span></div>
-  <div class="zonebar"><div class="bar" role="img" aria-label="Зона роста ${pct(g)}, зона стабильности ${pct(1-g)}">
-   <div class="g" style="width:${g*100}%"></div><div class="s" style="width:${z.t?(1-g)*100:0}%"></div>${tgtG!=null?`<span class="tick" style="left:calc(${tgtG*100}% - 1px)" title="Целевая граница"></span>`:''}</div>
-   <div class="legend"><span><span class="dot" style="background:var(--gold)"></span>Зона роста <b>${pct(g)}</b> ${money(z.g)}</span><span><span class="dot" style="background:var(--teal)"></span>Стабильность <b>${pct(z.t?1-g:0)}</b> ${money(z.s)}</span></div>
-   ${tgtG!=null?`<div class="small muted" style="margin-top:4px">Чёрная риска – целевое соотношение по стратегии: ${pct(tgtG,{dec:0})} / ${pct(1-tgtG,{dec:0})}</div>`:''}
+  <div class="zonebar"><div class="bar" role="img" aria-label="${ZORDER.map(k=>ZONES[k].full+' '+pct(sh[k])).join(', ')}">
+   ${ZORDER.map(k=>`<div class="${k==='growth'?'g':k==='yield'?'y':'s'}" style="width:${sh[k]*100}%"></div>`).join('')}${tz?[tz.growth,tz.growth+tz.yield].filter(v=>v>0.001&&v<0.999).map(v=>`<span class="tick" style="left:calc(${v*100}% - 1px)" title="Целевая граница"></span>`).join(''):''}</div>
+   <div class="legend">${ZORDER.map(k=>`<span><span class="dot" style="background:${ZONES[k].c}"></span>${ZONES[k].t}<br><b>${pct(sh[k])}</b> <span class="muted">${money(zv[k])}</span></span>`).join('')}</div>
+   ${tz?`<div class="small muted" style="margin-top:4px">Чёрные риски – границы зон по стратегии: рост ${pct(tz.growth,{dec:0})}, доходность ${pct(tz.yield,{dec:0})}, стабильность ${pct(tz.stable,{dec:0})}</div>`:''}
   </div></section>${priceBanner(L)}`;
   h+=`<div class="btns"><button class="btn primary" data-a="addTx">Добавить операцию</button><button class="btn" data-a="refresh">Обновить курсы</button></div>`;
   if(p.plan&&!L.missing.length){const R=rebalCalc(p,L);if(R&&R.total&&(R.outOfBand||R.due)&&R.trades.length)h+=`<div class="callout">${R.outOfBand?`${esc(keyName(R.worst.k))} ушёл от цели на ${nf(1).format(Math.abs(R.worst.dev*100))} п.п. – нужна внеплановая ребалансировка.`:'Подошёл срок плановой ребалансировки.'} <button class="btn sm" data-a="goRebal">Открыть</button></div>`}
   if(assets.length){
-    h+=`<h2>Сколько чего у ${p.owner?'меня':'клиента'}</h2><div class="tiles">${assets.map(a=>{const pp=a.cost?(a.value-a.cost)/a.cost:null;return`<button class="tile" style="text-align:left;cursor:pointer" data-a="openAsset" data-k="${a.asset}"><div class="sym">${esc(a.asset)}</div><div class="q">${qfmt(a.qty,a.asset)}</div><div>${money(a.value)}</div><div class="small ${cls(pp)}">${S.assets[a.asset]&&S.assets[a.asset].stable?'&nbsp;':pct(pp,{sign:true})+' к цене входа'}</div></button>`}).join('')}</div>`;
-    h+=`<h2>Где лежит капитал</h2><div class="list">${locs.map(l=>`<div class="row"><div class="grow"><div><b>${esc(locName(p,l.loc))}</b> <span class="pill">${esc(locKind(p,l.loc))}</span></div><div class="small muted">${l.items.map(i=>qfmt(i.qty,i.asset)+' '+esc(i.asset)).join(', ')}</div><div class="share"><i style="width:${z.t?l.value/z.t*100:0}%"></i></div></div><div class="r"><b>${money(l.value)}</b><div class="small muted">${pct(z.t?l.value/z.t:0)}</div></div></div>`).join('')}</div>`;
+    h+=`<h2>Сколько чего у ${p.owner?'меня':'клиента'}</h2><div class="tiles">${assets.map(a=>{const pp=a.cost?(a.value-a.cost)/a.cost:null;return`<button class="tile" style="text-align:left;cursor:pointer" data-a="openAsset" data-k="${a.asset}"><div class="sym"><span class="dot" style="background:${ZONES[aZone(a.asset)].c}"></span>${esc(a.asset)}</div><div class="q">${isUsdA(a.asset)?money(a.value):qfmt(a.qty,a.asset)}</div><div>${isUsdA(a.asset)?'вложено '+money(a.cost):money(a.value)}</div><div class="small ${cls(pp)}">${S.assets[a.asset]&&S.assets[a.asset].stable?'&nbsp;':pct(pp,{sign:true})+(isUsdA(a.asset)?' к вложенному':' к цене входа')}</div></button>`}).join('')}</div>`;
+    h+=`<h2>Где лежит капитал</h2><div class="list">${locs.map(l=>`<div class="row"><div class="grow"><div><b>${esc(locName(p,l.loc))}</b> <span class="pill">${esc(locKind(p,l.loc))}</span></div><div class="small muted">${l.items.map(i=>aq(i.qty,i.asset)).join(', ')}</div><div class="share"><i style="width:${z.t?l.value/z.t*100:0}%"></i></div></div><div class="r"><b>${money(l.value)}</b><div class="small muted">${pct(z.t?l.value/z.t:0)}</div></div></div>`).join('')}</div>`;
   }
   if(p.plan){
     const c=planCalc(p.plan);const prog=c.need?L.value/c.need:0;
@@ -504,7 +549,7 @@ function vAssets(){
   let h=`<div class="btns" style="margin-top:16px"><button class="btn primary" data-a="addTx">Добавить операцию</button><button class="btn" data-a="locations">Площадки (${p.locations.length})</button></div>${priceBanner(L)}`;
   h+=`<h2>Позиции</h2>`;
   if(!assets.length)h+=`<div class="card muted">Пока пусто. Добавьте покупку или перенос уже имеющихся активов операцией «Покупка / пополнение» – по цене, за которую они были куплены.</div>`;
-  else h+=`<div class="list">${assets.map(a=>{const open=OPEN_ASSET===a.asset;const pn=a.value-a.cost;return`<button class="row btnrow" data-a="openAsset" data-k="${a.asset}" aria-expanded="${open}"><div class="grow"><b>${esc(a.asset)}</b> <span class="muted small">${qfmt(a.qty,a.asset)} шт., средняя ${a.qty?usd(a.cost/a.qty,a.cost/a.qty<10?4:0):'–'}</span></div><div class="r"><b>${money(a.value)}</b><div class="small ${cls(pn)}">${money(pn,{sign:true})}</div></div></button>${open?a.locs.map(x=>`<div class="row" style="padding-left:28px;background:var(--bg)"><div class="grow small">${esc(locName(p,x.loc))} <span class="muted">${esc(locKind(p,x.loc))}</span></div><div class="r small">${qfmt(x.qty,x.asset)} · ${money(x.value)}</div></div>`).join(''):''}`}).join('')}</div>`;
+  else h+=`<div class="list">${assets.map(a=>{const open=OPEN_ASSET===a.asset;const pn=a.value-a.cost;return`<button class="row btnrow" data-a="openAsset" data-k="${a.asset}" aria-expanded="${open}"><div class="grow"><b>${esc(a.asset)}</b> <span class="muted small">${isUsdA(a.asset)?'вложено '+money(a.cost):`${qfmt(a.qty,a.asset)} шт., средняя ${a.qty?usd(a.cost/a.qty,a.cost/a.qty<10?4:0):'–'}`}</span></div><div class="r"><b>${money(a.value)}</b><div class="small ${cls(pn)}">${money(pn,{sign:true})}</div></div></button>${open?a.locs.map(x=>`<div class="row" style="padding-left:28px;background:var(--bg)"><div class="grow small">${esc(locName(p,x.loc))} <span class="muted">${esc(locKind(p,x.loc))}</span></div><div class="r small">${isUsdA(x.asset)?`<button class="btn sm" data-a="revalue" data-k="${x.asset}" data-loc="${x.loc}">Переоценить</button> `:qfmt(x.qty,x.asset)+' · '}${money(x.value)}</div></div>`).join(''):''}`}).join('')}</div>`;
   const txs=p.txs.slice().sort((a,b)=>a.date<b.date?1:-1);
   h+=`<h2>Операции</h2>`;
   if(!txs.length)h+=`<div class="card muted">Операций ещё нет.</div>`;
@@ -512,24 +557,29 @@ function vAssets(){
   return h;
 }
 function txLine(p,t){
-  const a=`${qfmt(num(t.qty),t.asset)} ${esc(t.asset)}`;
-  if(t.type==='swap')return`${a} → ${qfmt(num(t.toQty),t.toAsset)} ${esc(t.toAsset)}, ${esc(locName(p,t.loc))}`;
+  if(t.type==='revalue')return`${esc(t.asset)}: стоимость ${usd(num(t.value))}, ${esc(locName(p,t.loc))}${t.note?', '+esc(t.note):''}`;
+  const a=aq(num(t.qty),t.asset);
+  if(t.type==='swap')return`${a} → ${aq(num(t.toQty),t.toAsset)}, ${esc(locName(p,t.loc))}`;
   if(t.type==='transfer')return`${a}: ${esc(locName(p,t.loc))} → ${esc(locName(p,t.toLoc))}`;
   return`${a}, ${esc(locName(p,t.loc))}${t.note?', '+esc(t.note):''}`;
 }
-function assetOpts(sel){return Object.keys(S.assets).map(k=>`<option value="${k}" ${k===sel?'selected':''}>${k}</option>`).join('')}
+function assetOpts(sel,filter){return Object.keys(S.assets).filter(k=>!filter||filter(k)).map(k=>`<option value="${k}" ${k===sel?'selected':''}>${k}</option>`).join('')}
 function locOpts(p,sel){return p.locations.map(l=>`<option value="${l.id}" ${l.id===sel?'selected':''}>${esc(l.name)} (${esc(l.kind)})</option>`).join('')+`<option value="__new" ${!p.locations.length||sel==='__new'?'selected':''}>+ Новая площадка</option>`}
 function txForm(t){
   const p=P();const ty=t.type||'buy';
-  const pr=t.price??(S.prices[t.asset||'BTC']||'');
+  const usdKeys=Object.keys(S.assets).filter(isUsdA);
+  const a0=t.asset&&S.assets[t.asset]&&(ty!=='revalue'||isUsdA(t.asset))?t.asset:(ty==='revalue'?usdKeys[0]:(S.assets.BTC?'BTC':Object.keys(S.assets)[0]));
+  const isU=isUsdA(a0);
+  const pr=isU?1:(t.price??(S.prices[a0]||''));
   const newLoc=(name,sel)=>`<div class="grid2" data-newloc="${name}" ${sel==='__new'||!p.locations.length?'':'hidden'}><div class="field"><label>Название площадки</label><input class="inp" name="${name}Name" placeholder="Bybit, Aave, Ledger…"></div><div class="field"><label>Тип</label><select class="inp" name="${name}Kind">${LOC_KINDS.map(k=>`<option>${k}</option>`).join('')}</select></div></div>`;
+  if(ty==='revalue'&&!usdKeys.length)return`<form id="txf" onsubmit="return false"><div class="field"><label>Тип операции</label><select class="inp" name="type" data-rerender>${Object.entries(TX_TYPES).map(([k,v])=>`<option value="${k}" ${k===ty?'selected':''}>${v}</option>`).join('')}</select></div><div class="callout teal">Переоценка нужна для своих позиций, которые ведутся в долларах: опционные конструкции, маржинальный буфер, кэш-резерв. Добавьте такую позицию: Настройки → «Добавить актив» → «Своя позиция».</div></form>`;
   let h=`<form id="txf" onsubmit="return false"><input type="hidden" name="id" value="${t.id||''}">
   <div class="field"><label>Тип операции</label><select class="inp" name="type" data-rerender>${Object.entries(TX_TYPES).map(([k,v])=>`<option value="${k}" ${k===ty?'selected':''}>${v}</option>`).join('')}</select></div>
-  <div class="small muted" style="margin:-4px 0 12px">${{buy:'Новые деньги клиента заходят в актив – учитывается как вложение.',sell:'Актив продан и выведен из портфеля в реальную жизнь.',swap:'Один актив обменян на другой внутри портфеля, деньги не заходят и не выходят.',income:'Проценты лендинга, стейкинг, премия опционов, прибыль бота – это заработок, не вложение.',transfer:'Перенос актива с одной площадки на другую.'}[ty]}</div>
+  <div class="small muted" style="margin:-4px 0 12px">${{buy:'Новые деньги клиента заходят в актив – учитывается как вложение.',sell:'Актив продан и выведен из портфеля в реальную жизнь.',swap:'Один актив обменян на другой внутри портфеля, деньги не заходят и не выходят.',income:'Проценты лендинга, стейкинг, премия опционов, прибыль бота – это заработок, не вложение.',transfer:'Перенос актива с одной площадки на другую.',revalue:'Укажите, сколько позиция стоит сейчас. Разница с прошлой стоимостью станет прибылью или убытком, вложения не меняются.'}[ty]}</div>
   <div class="grid2"><div class="field"><label>Дата</label><input class="inp" type="date" name="date" value="${t.date||today()}"></div>
-  <div class="field"><label>${ty==='swap'?'Отдаю актив':'Актив'}</label><select class="inp" name="asset" data-rerender>${assetOpts(t.asset||'BTC')}</select></div></div>
-  <div class="grid2"><div class="field"><label>Количество</label><input class="inp" inputmode="decimal" name="qty" value="${t.qty??''}" placeholder="0.05"></div>
-  ${ty==='swap'||ty==='transfer'?'<div></div>':`<div class="field"><label>Цена за 1, $</label><input class="inp" inputmode="decimal" name="price" value="${pr}"></div>`}</div>
+  <div class="field"><label>${ty==='swap'?'Отдаю актив':'Актив'}</label><select class="inp" name="asset" data-rerender>${assetOpts(a0,ty==='revalue'?isUsdA:null)}</select></div></div>
+  ${ty==='revalue'?`<div class="field"><label>Текущая стоимость, $</label><input class="inp" inputmode="decimal" name="value" value="${t.value??''}"></div>`:`<div class="grid2"><div class="field"><label>${isU?'Сумма, $':'Количество'}</label><input class="inp" inputmode="decimal" name="qty" value="${t.qty??''}" placeholder="${isU?'1000':'0.05'}"></div>
+  ${ty==='swap'||ty==='transfer'||isU?`<input type="hidden" name="price" value="${pr}"><div></div>`:`<div class="field"><label>Цена за 1, $</label><input class="inp" inputmode="decimal" name="price" value="${pr}"></div>`}</div>`}
   <div class="field"><label>${ty==='transfer'?'Откуда':'Площадка'}</label><select class="inp" name="loc" data-newsel="loc">${locOpts(p,t.loc)}</select></div>${newLoc('loc',t.loc)}`;
   if(ty==='swap'){h+=`<div class="grid2"><div class="field"><label>Получаю актив</label><select class="inp" name="toAsset">${assetOpts(t.toAsset||'USDT')}</select></div><div class="field"><label>Количество</label><input class="inp" inputmode="decimal" name="toQty" value="${t.toQty??''}"></div></div>
    <div class="field"><label>Сумма сделки, $ (стоимость полученного)</label><input class="inp" inputmode="decimal" name="value" value="${t.value??''}" placeholder="если пусто – по текущему курсу"></div>`}
@@ -562,13 +612,12 @@ function vPlan(){
 }
 function fmtMonths(m){const y=Math.floor(m/12),mm=m%12;return(y?y+' г. ':'')+(mm?mm+' мес.':'')}
 function allocTables(pl){
-  const growth=pl.alloc.filter(a=>!isStableKey(a.k)).reduce((s,a)=>s+a.pct,0);
+  const tz=planZones(pl);
   return`<div class="card scroll"><h3 style="margin-bottom:6px">Пропорция активов и покупки по DCA</h3><table class="t"><thead><tr><th>Актив</th><th class="n">Доля</th><th class="n">Каждый месяц</th></tr></thead><tbody>
-  ${pl.alloc.map(a=>`<tr><td><span class="dot" style="background:${isStableKey(a.k)?'var(--teal)':'var(--gold)'}"></span>${esc(keyName(a.k))}</td><td class="n">${nf(1).format(a.pct)}%</td><td class="n">${money(pl.dca*a.pct/100)}</td></tr>`).join('')}
+  ${pl.alloc.map(a=>`<tr><td><span class="dot" style="background:${ZONES[keyZone(a.k)].c}"></span>${esc(keyName(a.k))}</td><td class="n">${nf(1).format(a.pct)}%</td><td class="n">${money(pl.dca*a.pct/100)}</td></tr>`).join('')}
   <tr><td><b>Итого</b></td><td class="n"><b>${nf(1).format(pl.alloc.reduce((s,a)=>s+a.pct,0))}%</b></td><td class="n"><b>${money(pl.dca)}</b></td></tr></tbody></table>
   <h3 style="margin:16px 0 6px">Распределение по зонам</h3><table class="t"><tbody>
-  <tr><td><span class="dot" style="background:var(--gold)"></span>Зона роста</td><td class="n">${nf(1).format(growth)}%</td><td class="n">${money(pl.dca*growth/100)}</td></tr>
-  <tr><td><span class="dot" style="background:var(--teal)"></span>Зона стабильности</td><td class="n">${nf(1).format(100-growth)}%</td><td class="n">${money(pl.dca*(100-growth)/100)}</td></tr></tbody></table></div>`;
+  ${ZORDER.map(z=>`<tr><td><span class="dot" style="background:${ZONES[z].c}"></span>${ZONES[z].full}</td><td class="n">${nf(1).format(tz[z]*100)}%</td><td class="n">${money(pl.dca*tz[z])}</td></tr>`).join('')}</tbody></table></div>`;
 }
 function startWizard(){const p=P();const pl=p.plan;const L=ledger(p,S.prices);
   W={step:0,d:pl?JSON.parse(JSON.stringify(pl)):{target:5000,capital:Math.round(L.value)||0,dca:1000,withdraw:false,model:null,answers:[],alloc:null}};TAB='plan';render();window.scrollTo(0,0)}
@@ -616,7 +665,7 @@ function allocEditor(al){
   const sum=al.reduce((s,a)=>s+num(a.pct),0);
   const keys=['STABLES',...Object.keys(S.assets).filter(k=>!S.assets[k].stable)];
   return`<div class="card">${al.map((a,i)=>`<div class="grid2" style="grid-template-columns:1fr 110px 40px;align-items:center;margin-bottom:8px"><select class="inp" data-al="k" data-i="${i}">${keys.map(k=>`<option value="${k}" ${k===a.k?'selected':''}>${keyName(k)}</option>`).join('')}</select><input class="inp" inputmode="decimal" data-al="pct" data-i="${i}" value="${a.pct}" aria-label="Доля, %"><button class="icon-btn" data-a="alDel" data-i="${i}" aria-label="Убрать">✕</button></div>`).join('')}
-  <div style="display:flex;justify-content:space-between;align-items:center"><button class="btn sm" data-a="alAdd">Добавить актив</button><span class="${Math.abs(sum-100)<0.01?'up':'down'}">Сумма ${nf(1).format(sum)}%</span></div></div>`;
+  <div style="display:flex;justify-content:space-between;align-items:center"><span style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm" data-a="alAdd">Добавить строку</button><button class="btn sm" data-a="addAsset" data-ret="${W?'wizard':'alloc'}">Найти монету</button></span><span class="${Math.abs(sum-100)<0.01?'up':'down'}">Сумма ${nf(1).format(sum)}%</span></div></div>`;
 }
 
 /* ===================== Метрики ===================== */
@@ -645,6 +694,7 @@ function vMetrics(){
    ${k('Пассивный доход, 30 дней',money(m.income30),`Лендинг, стейкинг, опционы, боты. В пересчёте на год ${pct(m.passiveYield)} от капитала.`,'')}
    ${m.incomeVsTarget!=null?k('Покрытие цели доходом',pct(m.incomeVsTarget,{dec:0}),`Сколько от цели ${money(p.plan.target)} в месяц уже даёт пассивный доход.`,grade(m.incomeVsTarget,1,0.5)):''}
    ${m.progress!=null?k('Прогресс к капиталу',pct(m.progress,{dec:0}),`Нужно ${money(m.need)}.`,grade(m.progress,1,0.5)):''}
+   ${k('Зона доходности',pct(m.yieldShare),m.yieldApr!=null?`Принесла ${money(m.yieldInc)} за 30 дней – ${pct(m.yieldApr)} годовых на эту зону. Учитывается доход, записанный в активы этой зоны.`:'Опционы, covered call, лендинг, боты. Доход записывайте операцией «Доход» в актив этой зоны.','')}
    ${k('Зона стабильности',pct(m.stableShare),m.runway!=null?`Хватит на ${nf(1).format(m.runway)} мес. выплат по цели без продажи BTC и ETH.`:'Доля стейблкоинов – подушка на просадках.','')}
    ${m.drift!=null?k('Отклонение от стратегии',pct(m.drift),'Какую долю капитала нужно переложить, чтобы вернуться к целевым пропорциям. Больше 10% – пора ребалансировать.',m.drift<0.05?'up':m.drift<0.1?'':'down'):''}
    ${k('Концентрация на площадке',pct(m.maxLoc),m.maxLocName?`Больше всего лежит в «${esc(m.maxLocName)}». Больше 50% на одной бирже или протоколе – риск контрагента.`:'Риск контрагента.',m.maxLoc==null?'':m.maxLoc<=0.5?'up':m.maxLoc<=0.7?'':'down')}
@@ -730,8 +780,8 @@ function reportText(p){
   const last=p.feeRecs[p.feeRecs.length-1];
   let t=`Отчёт по портфелю: ${p.name}\n${new Date().toLocaleDateString('ru-RU')}\n\nСтоимость: ${money(L.value)}\nВложено: ${money(L.net)}\nРезультат: ${money(L.pnl,{sign:true})} (${pct(m.totalRet,{sign:true})})\n`;
   if(m.twr!=null)t+=`Доходность управления: ${pct(m.twr,{sign:true})}${m.btc!=null?`, BTC за период ${pct(m.btc,{sign:true})}`:''}\nМакс. просадка: ${pct(m.mdd)}\n`;
-  t+=`\nАктивы:\n${as.map(a=>`${a.asset}: ${qfmt(a.qty,a.asset)} (${money(a.value)})`).join('\n')}\n`;
-  const z=zones(L);t+=`\nЗона роста ${pct(z.t?z.g/z.t:0)}, зона стабильности ${pct(z.t?z.s/z.t:0)}\n`;
+  t+=`\nАктивы:\n${as.map(a=>isUsdA(a.asset)?`${a.asset}: ${money(a.value)}`:`${a.asset}: ${qfmt(a.qty,a.asset)} (${money(a.value)})`).join('\n')}\n`;
+  const z=zones(L);t+=`\nЗона роста ${pct(z.t?z.g/z.t:0)}, зона доходности ${pct(z.t?z.y/z.t:0)}, зона стабильности ${pct(z.t?z.s/z.t:0)}\n`;
   if(p.plan){t+=`Цель: ${money(p.plan.target)} в месяц, прогресс ${pct(m.progress,{dec:0})}\n`}
   if(last)t+=`\nКомиссия за ${last.period}: ${money(last.mf+last.pf)} (management ${money(last.mf)}, performance ${money(last.pf)})${last.paid?', оплачено':''}\n`;
   return t;
@@ -746,7 +796,7 @@ function settingsHtml(){
   <div class="field"><label>Целевая доходность для расчёта капитала, %</label><input class="inp" inputmode="decimal" data-set="targetRate" value="${s.targetRate}"></div></div>
   <div class="field"><label>Безрисковая ставка для Шарпа и Сортино, %</label><input class="inp" inputmode="decimal" data-set="riskFree" value="${s.riskFree}"></div>
   <h3 style="margin:18px 0 8px">Курсы, $</h3><p class="small muted" style="margin-top:0">${S.pricesAt?`Обновлены ${new Date(S.pricesAt).toLocaleString('ru-RU')} (${S.pricesSrc==='live'?'CoinGecko':'вручную'}).`:'Ещё не обновлялись.'} Если автозагрузка недоступна, введите вручную.</p>
-  <div class="list">${Object.entries(S.assets).map(([k,a])=>`<div class="row"><div class="grow"><b>${esc(k)}</b> <span class="small muted">${esc(a.name)}${a.stable?', стейблкоин':''}</span>${S.chg[k]!=null?` <span class="small ${cls(S.chg[k])}">${pct(S.chg[k]/100,{sign:true})} за 24ч</span>`:''}</div><input class="inp" style="width:130px" inputmode="decimal" data-price="${k}" value="${S.prices[k]??''}" aria-label="Курс ${esc(k)}">${DEFAULT_ASSETS[k]?'':`<button class="icon-btn" data-a="delAsset" data-k="${k}" aria-label="Удалить актив">✕</button>`}</div>`).join('')}</div>
+  <div class="list">${Object.entries(S.assets).map(([k,a])=>`<div class="row"><div class="grow"><b>${esc(k)}</b> <span class="small muted">${esc(a.name)}</span> <button class="pill" data-a="toggleZone" data-k="${k}" title="Переключить зону" style="border:0;cursor:pointer;background:transparent;padding:0"><span class="dot" style="background:${ZONES[aZone(k)].c}"></span>${ZONES[aZone(k)].t.toLowerCase()}</button>${a.kind?` <span class="small muted">${a.kind==='usd'?'своя, в $':'своя цена'}</span>`:''}${S.chg[k]!=null?` <span class="small ${cls(S.chg[k])}">${pct(S.chg[k]/100,{sign:true})} за 24ч</span>`:''}</div>${a.kind==='usd'?'<span class="small muted" style="width:130px;text-align:right">стоимость через переоценку</span>':`<input class="inp" style="width:130px" inputmode="decimal" data-price="${k}" value="${S.prices[k]??''}" aria-label="Курс ${esc(k)}">`}<button class="icon-btn" data-a="delAsset" data-k="${k}" aria-label="Убрать ${esc(k)} из списка">✕</button></div>`).join('')}</div>
   <div class="btns"><button class="btn" data-a="refresh">Загрузить курсы</button><button class="btn" data-a="addAsset">Добавить актив</button></div>
   <h3 style="margin:22px 0 8px">Резервная копия</h3>
   <p class="small muted" style="margin-top:0">${dbRef?'Данные синхронизируются в облаке артефакта.':'Данные хранятся на этом устройстве.'} ${inTG?(apiUrl()?'Копия приходит файлом в чат с ботом. Чтобы восстановить – перешлите этот файл боту или выберите его здесь.':'Чтобы получать копию файлом в чат, укажите адрес сервера бота.'):''}</p>
@@ -826,10 +876,13 @@ const A={
   editTx:d=>{const t=P().txs.find(x=>x.id===d.k);if(t)openSheet('Операция',txForm({...t}))},
   saveTx:()=>{
     const p=P();const o=readForm('#txf');const qty=num(o.qty);
-    if(!(qty>0))return toast('Укажите количество');
+    if(o.type==='revalue'){if(!isUsdA(o.asset))return toast('Выберите свою позицию');const lc=ensureLoc(p,o,'loc');if(!lc)return toast('Выберите или назовите площадку');if(String(o.value||'').trim()==='')return toast('Укажите текущую стоимость');
+      const t={id:o.id||uid(),type:'revalue',date:o.date||today(),asset:o.asset,loc:lc,qty:0,value:r2(Math.max(0,num(o.value))),note:o.note||''};
+      const i=p.txs.findIndex(x=>x.id===t.id);if(i>=0)p.txs[i]=t;else p.txs.push(t);closeSheet();save();haptic();return toast('Стоимость обновлена')}
+    if(!(qty>0))return toast(isUsdA(o.asset)?'Укажите сумму':'Укажите количество');
     const loc=ensureLoc(p,o,'loc');if(!loc)return toast('Выберите или назовите площадку');
     const t={id:o.id||uid(),type:o.type,date:o.date||today(),asset:o.asset,qty,loc,note:o.note||''};
-    if(['buy','sell','income'].includes(o.type)){const pr=num(o.price);if(!(pr>0))return toast('Укажите цену');t.price=pr;t.value=r2(pr*qty)}
+    if(['buy','sell','income'].includes(o.type)){const pr=isUsdA(o.asset)?1:num(o.price);if(!(pr>0))return toast('Укажите цену');t.price=pr;t.value=r2(pr*qty)}
     if(o.type==='swap'){t.toAsset=o.toAsset;t.toQty=num(o.toQty);if(!(t.toQty>0))return toast('Укажите, сколько получено');t.toLoc=loc;t.value=num(o.value)||r2(t.toQty*(S.prices[t.toAsset]||0));if(!t.value)return toast('Укажите сумму сделки')}
     if(o.type==='transfer'){const to=ensureLoc(p,o,'toLoc');if(!to)return toast('Куда переводим?');t.toLoc=to;t.fee=num(o.fee);t.value=0}
     const i=p.txs.findIndex(x=>x.id===t.id);if(i>=0)p.txs[i]=t;else p.txs.push(t);
@@ -857,9 +910,29 @@ const A={
   report:()=>{const t=reportText(P());openSheet('Отчёт клиенту',`<textarea class="inp" id="rep" style="min-height:260px;font-size:14px">${esc(t)}</textarea><div class="btns"><button class="btn primary" data-a="copyRep">Скопировать</button>${inTG?'<button class="btn" data-a="shareRep">Отправить в Telegram</button>':''}</div>`)},
   copyRep:()=>copy($('#rep').value),
   shareRep:()=>{tg.openTelegramLink('https://t.me/share/url?url='+encodeURIComponent(' ')+'&text='+encodeURIComponent($('#rep').value))},
-  addAsset:()=>openSheet('Новый актив',`<div class="grid2"><div class="field"><label>Тикер</label><input class="inp" id="naSym" placeholder="ARB"></div><div class="field"><label>Название</label><input class="inp" id="naName" placeholder="Arbitrum"></div></div><div class="field"><label>ID на CoinGecko для автокурса</label><input class="inp" id="naCg" placeholder="arbitrum (необязательно)"></div><div class="field"><label>Курс, $</label><input class="inp" id="naPr" inputmode="decimal"></div><div class="field"><label>Зона</label><select class="inp" id="naSt"><option value="0">Зона роста</option><option value="1">Стейблкоин, зона стабильности</option></select></div><div class="btns"><button class="btn primary" data-a="saveAsset">Добавить</button></div>`),
-  saveAsset:()=>{const k=$('#naSym').value.trim().toUpperCase();if(!k)return toast('Введите тикер');S.assets[k]={name:$('#naName').value.trim()||k,cg:$('#naCg').value.trim()||null,stable:$('#naSt').value==='1'};const pr=num($('#naPr').value);if(pr)S.prices[k]=pr;save({silent:true});openSettings();if(S.assets[k].cg)refreshPrices()},
-  delAsset:d=>{if(S.portfolios.some(p=>p.txs.some(t=>t.asset===d.k||t.toAsset===d.k)))return toast('Актив используется в операциях');delete S.assets[d.k];delete S.prices[d.k];save({silent:true});openSettings()},
+  addTab:d=>{const n=$('#cuName');if(n){CU.name=n.value;CU.zone=$('#cuZone').value;const pz=$('#cuPrice');if(pz)CU.price=pz.value}ADD_TAB=d.k;openSheet('Новый актив',addAssetHtml())},
+  cuKind:d=>{CU.name=$('#cuName').value;CU.zone=$('#cuZone').value;const pz=$('#cuPrice');if(pz)CU.price=pz.value;CU.kind=d.k;openSheet('Новый актив',addAssetHtml())},
+  saveCustom:()=>{const name=cleanName($('#cuName').value);if(!name)return toast('Введите название');if(S.assets[name])return toast(`«${name}» уже есть в списке`);
+    const zone=$('#cuZone').value;const kind=CU.kind;let price=1;if(kind==='unit'){price=num(($('#cuPrice')||{}).value);if(!(price>0))return toast('Укажите цену за единицу')}
+    S.assets[name]={name,cg:null,stable:false,zone,kind};S.prices[name]=price;S.removedAssets=(S.removedAssets||[]).filter(x=>x!==name);
+    CU={name:'',zone:'yield',kind:'usd',price:''};save({silent:true});haptic();toast(`Добавлено: «${name}»`);afterAssetAdded()},
+  revalue:d=>{const p=P();const x=ledger(p,S.prices).pos.find(q=>q.asset===d.k&&q.loc===d.loc);openSheet('Переоценка',txForm({type:'revalue',asset:d.k,loc:d.loc,value:x?r2(x.value):''}))},
+  addAsset:d=>{ADD_RET=(d&&d.ret)||'settings';SEARCH_Q='';ADD_TAB='coin';openSheet('Новый актив',addAssetHtml());setTimeout(()=>{const i=$('#srQ');i&&i.focus()},60)},
+  pickCoin:async d=>{const sym=String(d.sym||'').toUpperCase();if(!sym)return;
+    if(S.assets[sym]&&S.assets[sym].cg!==d.id)return toast(`Тикер ${sym} уже занят (${S.assets[sym].name}). Уберите его из списка или добавьте эту монету вручную с другим тикером.`);
+    {const st=guessStable(sym,d.name||'');S.assets[sym]={name:d.name||sym,cg:d.id,stable:st,zone:st?'stable':'growth'}}
+    S.removedAssets=(S.removedAssets||[]).filter(x=>x!==sym);
+    if(S.assets[sym].stable&&!S.prices[sym])S.prices[sym]=1;
+    save({silent:true});haptic();toast(`${sym} добавлен`);afterAssetAdded();
+    try{const j=await fetchT(`https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(d.id)}&vs_currencies=usd&include_24hr_change=true`);if(j[d.id]&&j[d.id].usd){S.prices[sym]=j[d.id].usd;S.chg[sym]=j[d.id].usd_24h_change;S.pricesAt=S.pricesAt||Date.now();save({silent:true});if(!$('#sheet').hidden&&$('[data-price]'))openSettings();else if($('#sheet').hidden)render()}}catch(e){toast(`Курс ${sym} не загрузился – введите его в настройках`)}},
+  toggleZone:d=>{const a=S.assets[d.k];if(!a)return;const cur=aZone(d.k);a.zone=ZORDER[(ZORDER.indexOf(cur)+1)%3];save({silent:true});openSettings();toast(`${d.k}: ${ZONES[a.zone].full.toLowerCase()}`)},
+  saveAsset:()=>{const k=$('#naSym').value.trim().toUpperCase();if(!k)return toast('Введите тикер');if(S.assets[k])return toast(`${k} уже есть в списке`);S.assets[k]={name:$('#naName').value.trim()||k,cg:null,stable:$('#naSt').value==='1'};S.removedAssets=(S.removedAssets||[]).filter(x=>x!==k);const pr=num($('#naPr').value);if(pr)S.prices[k]=pr;save({silent:true});toast(`${k} добавлен`);afterAssetAdded()},
+  delAsset:async d=>{const k=d.k;
+    const inTx=S.portfolios.find(p=>p.txs.some(t=>t.asset===k||t.toAsset===k));if(inTx)return toast(`${k} есть в операциях портфеля «${inTx.name}». Сначала удалите эти операции.`);
+    const inPlan=S.portfolios.find(p=>p.plan&&p.plan.alloc.some(a=>a.k===k));if(inPlan)return toast(`${k} есть в стратегии «${inPlan.name}». Сначала уберите его из пропорций.`);
+    if(!await ask(`Убрать ${k} из списка активов? Его можно будет снова найти и добавить.`,'Убрать'))return openSettings();
+    delete S.assets[k];delete S.prices[k];delete S.chg[k];if(DEFAULT_ASSETS[k]&&!S.removedAssets.includes(k))S.removedAssets.push(k);
+    save({silent:true});openSettings();toast(`${k} убран`)},
   backup:()=>openSheet('Копия текстом',`<p class="small muted">Скопируйте текст и сохраните в «Избранное» Telegram или в файл.</p><textarea class="inp" id="bk" readonly>${esc(backupJson())}</textarea><div class="btns"><button class="btn primary" data-a="copyBk">Скопировать</button></div>`),
   copyBk:()=>copy($('#bk').value),
   restore:()=>openSheet('Восстановить',`<p class="small muted">Вставьте текст резервной копии. Текущие данные будут заменены.</p><textarea class="inp" id="rs"></textarea><div class="btns"><button class="btn primary" data-a="doRestore">Восстановить</button></div>`),
@@ -870,7 +943,7 @@ const A={
   wnext:()=>{if(W.step===0&&!(W.d.target>0))return toast('Укажите желаемую сумму в месяц');if(W.step===1)W.resetAlloc=true;W.step++;render();window.scrollTo(0,0)},
   wback:()=>{W.step--;render();window.scrollTo(0,0)},
   wcancel:()=>{W=null;TAB='home';render()},
-  alAdd:()=>{const al=W?W.d.alloc:P().plan.alloc;al.push({k:'SOL',pct:0});W?render():A.editAlloc()},
+  alAdd:()=>{const al=W?W.d.alloc:P().plan.alloc;const free=['STABLES',...Object.keys(S.assets).filter(k=>!S.assets[k].stable)].find(k=>!al.some(a=>a.k===k));if(!free)return toast('Все активы уже в списке – найдите новую монету');al.push({k:free,pct:0});W?render():A.editAlloc()},
   alDel:d=>{const al=W?W.d.alloc:P().plan.alloc;al.splice(+d.i,1);W?render():A.editAlloc()},
   wfinish:()=>{const d=W.d;if(!P().rebal.last)P().rebal.last=today();const sum=d.alloc.reduce((s,a)=>s+num(a.pct),0);if(Math.abs(sum-100)>0.01)return toast('Сумма долей должна быть 100%');
     const p=P();p.plan={target:num(d.target),capital:num(d.capital),dca:num(d.dca),withdraw:!!d.withdraw,model:d.model,answers:d.answers,profile:d.profile,score:d.score,alloc:d.alloc.map(a=>({k:a.k,pct:num(a.pct)}))};W=null;TAB='home';save();haptic();toast('Стратегия сохранена')},
@@ -890,7 +963,7 @@ document.addEventListener('change',e=>{
   const el=e.target;const p=P();
   if(el.dataset.w!==undefined){W.d[el.dataset.w]=num(el.value);render();return}
   if(el.dataset.al){const al=W?W.d.alloc:p.plan.alloc;const a=al[+el.dataset.i];if(el.dataset.al==='k')a.k=el.value;else a.pct=num(el.value);if(W)render();else{save({silent:true});A.editAlloc()}return}
-  if(el.dataset.rerender!==undefined){const o=readForm('#txf');if(el.name==='asset'){o.price=S.prices[o.asset]||''}openSheet(o.id?'Операция':'Новая операция',txForm(o));return}
+  if(el.dataset.rerender!==undefined){const o=readForm('#txf');if(el.name==='asset'){o.price=S.prices[o.asset]||''}if(el.name==='type'&&o.type==='revalue'&&!isUsdA(o.asset))o.asset=null;openSheet(o.id?'Операция':'Новая операция',txForm(o));return}
   if(el.dataset.newsel){const box=document.querySelector(`[data-newloc="${el.dataset.newsel}"]`);if(box)box.hidden=el.value!=='__new';return}
   if(el.dataset.pf){p[el.dataset.pf]=el.value;save();return}
   if(el.dataset.tier){p.fees.tiers[+el.dataset.i][el.dataset.tier]=num(el.value);save({silent:true});return}
@@ -905,6 +978,7 @@ document.addEventListener('change',e=>{
 });
 document.addEventListener('input',e=>{
   const el=e.target;
+  if(el.id==='srQ'){SEARCH_Q=el.value.trim();clearTimeout(SEARCH_T);SEARCH_T=setTimeout(()=>searchCoins(SEARCH_Q),350);return}
   if(el.dataset.w!==undefined&&W&&W.step===0){W.d[el.dataset.w]=num(el.value);const c=$('#wcalc');if(c)c.innerHTML=wizCalc(W.d,planCalc(W.d))}
   if(el.dataset.cm!==undefined){const p=P();const f=$('#cmf');if(el.dataset.cm==='period'){const o={period:el.value,...monthDefaults(p,el.value)};['start','end','flows'].forEach(k=>f.elements[k].value=o[k])}
     const o=readForm('#cmf');$('#cmPrev').innerHTML=cmPreview(p,feeCalc(p,num(o.start),num(o.end),num(o.flows)))}
