@@ -144,8 +144,9 @@ table.t td.n,table.t th.n{text-align:right;white-space:nowrap}
 
 <script>
 /* ===================== версия ===================== */
-const APP_VERSION='1.5.5';
+const APP_VERSION='1.5.6';
 const CHANGELOG=[
+ {v:'1.5.6',d:'01.10.2026',items:['Перевод между площадками теперь оценивается по курсу актива на дату перевода, а не по средней цене покупки. Итоги, движение по месяцам и результат площадки считаются верно','В форме перевода курс на дату подтягивается сам, его можно поправить вручную','Старые переводы пересчитаны по историческому курсу автоматически','В хронологии у перевода видны курс и стоимость в долларах']},
  {v:'1.5.5',d:'23.09.2026',items:['Переоценка показывает, сколько позиция стоила до и сколько станет, и какой получится результат','Если деньги на позицию пришли в стейблкоинах (например, USDT на бирже как маржа фьючерсов), при переоценке их можно сразу перенести в позицию – тогда результат площадки считается верно','Переоценка всегда применяется после других операций того же дня']},
  {v:'1.5.4',d:'23.09.2026',items:['В «Истории» при выборе площадки итоги считаются по этой площадке: что куплено на ней, что пришло переводами с других площадок, что продано и выведено','Для площадки видно, сколько на ней сейчас и какой на ней результат','«Взносы по месяцам» и «Куда вложено» для площадки тоже учитывают переводы']},
  {v:'1.5.3',d:'23.09.2026',items:['Фильтры в «Истории» теперь меняют всё: итоги, взносы по месяцам, «Куда вложено» и хронологию','При выборе актива видно, сколько штук пришло, ушло и сколько осталось на выбранной площадке','Показано число найденных операций и кнопка «Сбросить фильтры»','Фильтры сбрасываются при переключении на другого клиента']},
@@ -214,6 +215,7 @@ function save(opts){
   try{localStorage.setItem(LS_KEY,JSON.stringify(S))}catch(e){}
   if(dbRef){clearTimeout(dbTimer);dbTimer=setTimeout(()=>{dbRef.doc('workspace/main').set({json:JSON.stringify(S),savedAt:S.savedAt}).catch(()=>{})},600)}
   if(!opts||!opts.silent)render();
+  if(needTrPrice())setTimeout(priceTransfers,300);
 }
 async function initCloud(){
   try{
@@ -269,6 +271,49 @@ function ledger(p,prices,until){
   const equity=value-debt;
   return{pos:list,inflow,outflow,income,realized,gross:value,debt,value:equity,net:inflow-outflow,pnl:equity+outflow-inflow,missing:[...new Set(missing)],info};
 }
+/* ===================== курс на дату (для переводов) ===================== */
+const HIST={},HIST_FAIL={};
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+// цена 1 единицы актива в $ на дату (YYYY-MM-DD): CoinGecko history, запасной вариант – дневная свеча Binance
+async function histPrice(a,date){
+  const as=S.assets[a];if(!as)return null;
+  if(isUsdA(a))return 1;
+  if(as.stable)return S.prices[a]||1;
+  if(!date||date>=today())return S.prices[a]||null;
+  const k=a+'|'+date;if(HIST[k])return HIST[k];
+  let pr=null;
+  if(as.cg){try{const [y,m,d]=date.split('-');const j=await fetchT(`https://api.coingecko.com/api/v3/coins/${encodeURIComponent(as.cg)}/history?date=${d}-${m}-${y}&localization=false`,10000);pr=(j&&j.market_data&&j.market_data.current_price&&j.market_data.current_price.usd)||null}catch(e){}}
+  if(!pr&&/^[A-Z0-9]{2,10}$/.test(a)){try{const t0=Date.parse(date+'T00:00:00Z');const j=await fetchT(`https://api.binance.com/api/v3/klines?symbol=${a}USDT&interval=1d&startTime=${t0}&limit=1`,8000);if(Array.isArray(j)&&j[0]&&j[0][0]===t0)pr=num(j[0][1])||null}catch(e){}}
+  if(pr)HIST[k]=pr;return pr;
+}
+// перевод без курса, который можно оценить автоматически
+const trPricable=t=>t.type==='transfer'&&!(num(t.price)>0)&&!HIST_FAIL[t.asset+'|'+t.date]&&S.assets[t.asset]&&(isUsdA(t.asset)||S.assets[t.asset].stable||S.assets[t.asset].cg);
+const needTrPrice=()=>S.portfolios.some(p=>p.txs.some(trPricable));
+let TR_BUSY=false;
+async function priceTransfers(){
+  if(TR_BUSY)return;TR_BUSY=true;let n=0;
+  try{
+    const todo=[];S.portfolios.forEach(p=>p.txs.forEach(t=>{if(trPricable(t))todo.push(t)}));
+    for(const t of todo){
+      const k=t.asset+'|'+t.date;const net=!isUsdA(t.asset)&&!S.assets[t.asset].stable&&t.date<today()&&!HIST[k];
+      const pr=await histPrice(t.asset,t.date);
+      if(pr>0){t.price=pr;t.value=r2(num(t.qty)*pr);n++}else HIST_FAIL[k]=1;
+      if(net&&todo.length>1)await sleep(3000);
+    }
+  }finally{TR_BUSY=false}
+  if(n){save({silent:true});if($('#sheet').hidden)render()}
+}
+// стоимость перевода: ушло с площадки «откуда» и пришло на «куда» (за вычетом комиссии сети)
+function trFlow(t,L){const q=num(t.qty),pr=num(t.price);if(pr>0)return{out:q*pr,in:Math.max(0,q-num(t.fee))*pr};const c=(L.info[t.id]||{}).cost||0;return{out:c,in:c}}
+function trInfoHtml(o){const q=num(o.qty),pr=isUsdA(o.asset)?1:num(o.price);if(!(q>0&&pr>0))return'';const fee=num(o.fee);return`Стоимость перевода по курсу на дату: <b>${usd(q*pr)}</b>${fee>0?`, дойдёт ${usd(Math.max(0,q-fee)*pr)} (комиссия сети ${usd(fee*pr)})`:''}. Эта сумма засчитается как ушедшая с одной площадки и пришедшая на другую.`}
+async function fillTrPrice(force){
+  const f=$('#txf');if(!f||f.elements.type.value!=='transfer')return;const inp=f.elements.price;if(!inp||inp.type==='hidden'||inp.dataset.tp==='manual')return;if(!force&&inp.value)return;
+  const a=f.elements.asset.value,d=f.elements.date.value||today();inp.value='';inp.placeholder='загружаю курс…';updTrInfo();
+  const pr=await histPrice(a,d);
+  if(!document.body.contains(inp)||inp.dataset.tp==='manual'||f.elements.asset.value!==a||(f.elements.date.value||today())!==d)return;
+  if(pr>0)inp.value=+pr.toPrecision(8);else inp.placeholder='не загрузился – введите вручную';updTrInfo();
+}
+function updTrInfo(){const box=$('#trInfo');if(!box)return;const html=trInfoHtml(readForm('#txf'));box.innerHTML=html;box.style.display=html?'':'none'}
 function loanState(p,l,prices,until){
   const end=until||today();
   const ev=[...p.txs.filter(t=>t.loanId===l.id&&(t.type==='borrow'||t.type==='repay')&&t.date<=end).map(t=>({d:t.date,k:t.type,a:num(t.qty)})),...(l.sets||[]).filter(x=>x.d<=end).map(x=>({d:x.d,k:'set',a:num(x.amount)}))].sort((a,b)=>a.d<b.d?-1:a.d>b.d?1:0);
@@ -664,7 +709,7 @@ const HTYPES={all:'Все',buy:'Взносы',sell:'Продажи и вывод
 const monthTitle=ym=>{const s=new Date(ym+'-15').toLocaleDateString('ru-RU',{month:'long',year:'numeric'}).replace(' г.','');return s[0].toUpperCase()+s.slice(1)};
 function txRow(p,t,L){
   const inf=L.info[t.id];
-  const val=t.type==='transfer'?'':t.type==='revalue'?usd(num(t.value)):`<span class="${t.type==='sell'?'down':t.type==='income'?'up':''}">${t.type==='sell'?'−':t.type==='buy'?'+':''}${usd(num(t.value))}</span>`;
+  const val=t.type==='transfer'?(num(t.price)>0?`<span class="muted">${usd(num(t.value)||num(t.qty)*num(t.price))}</span>`:''):t.type==='revalue'?usd(num(t.value)):`<span class="${t.type==='sell'?'down':t.type==='income'?'up':''}">${t.type==='sell'?'−':t.type==='buy'?'+':''}${usd(num(t.value))}</span>`;
   const rl=inf&&inf.realized!=null?`<div class="small ${cls(inf.realized)}">${inf.realized>=0?'прибыль':'убыток'} ${money(inf.realized,{sign:true})}${inf.cost>0?' ('+pct(inf.realized/inf.cost,{sign:true})+')':''}</div>`:'';
   return`<button class="row btnrow" data-a="editTx" data-k="${t.id}"><div class="grow"><div><b>${txLabel(t.type)}</b> <span class="muted small">${new Date(t.date).toLocaleDateString('ru-RU')}</span></div><div class="small muted">${txLine(p,t)}</div></div><div class="r">${val}${rl}</div></button>`;
 }
@@ -694,7 +739,7 @@ function vHistory(p,L){
     const at=t.loc===LOC,to=(t.toLoc||t.loc)===LOC;
     if(t.type==='buy'&&at)return{i:v,o:0,k:'buy'};
     if(t.type==='sell'&&at)return{i:0,o:v,k:'sell'};
-    if(t.type==='transfer'&&at!==to){const c=(L.info[t.id]||{}).cost||0;return at?{i:0,o:c,k:'tout'}:{i:c,o:0,k:'tin'}}
+    if(t.type==='transfer'&&at!==to){const c=trFlow(t,L);return at?{i:0,o:c.out,k:'tout'}:{i:c.in,o:0,k:'tin'}}
     if(t.type==='swap'&&at!==to)return at?{i:0,o:v,k:'tout'}:{i:v,o:0,k:'tin'};
     return null};
   const F={buy:0,sell:0,tin:0,tout:0};list.forEach(t=>{const f=flow(t);if(f)F[f.k]+=f.i+f.o});
@@ -718,7 +763,7 @@ function vHistory(p,L){
    ${row('Доход (лендинг, опционы, боты)',money(incV),'up',all||incV)}${row('Зафиксированная прибыль',money(realV,{sign:true}),cls(realV),all||realV)}`}
    ${A_?`${row(`Пришло ${esc(A_)}${HF.loc?' на '+esc(locName(p,HF.loc)):''}`,qfmt(qIn,A_)+' '+esc(A_),'',true)}${row(`Ушло ${esc(A_)}`,qfmt(qOut,A_)+' '+esc(A_),'',true)}${row(`Сейчас ${esc(A_)}${HF.loc?' на '+esc(locName(p,HF.loc)):''}`,`${qfmt(nowQ,A_)} ${esc(A_)} (${money(nowV)})`,'',true)}`:''}
    ${!all&&!inV&&!outV&&!incV&&!realV&&!A_&&!(LOC&&(F.buy||F.tin||F.sell||F.tout||locInc||locReal))?`<span class="muted">Сумма по этим операциям</span><span class="v">${money(list.reduce((a,t)=>a+num(t.value),0))}</span>`:''}
-  </div>${LOC?'<p class="small muted" style="margin:8px 0 0">Переводы между площадками оцениваются по цене покупки переведённого актива. «Результат на площадке» = сколько там сейчас минус чистые вложения в неё.</p>':''}${A_&&!HF.year&&all?'<p class="small muted" style="margin:8px 0 0">«Пришло» – покупки, доход, обмены в актив, займы и переводы на площадку. «Ушло» – продажи, обмены из актива, погашения и переводы с площадки.</p>':''}</div>`;
+  </div>${LOC?'<p class="small muted" style="margin:8px 0 0">Переводы между площадками оцениваются по курсу актива на дату перевода. «Результат на площадке» = сколько там сейчас минус чистые вложения в неё.</p>':''}${A_&&!HF.year&&all?'<p class="small muted" style="margin:8px 0 0">«Пришло» – покупки, доход, обмены в актив, займы и переводы на площадку. «Ушло» – продажи, обмены из актива, погашения и переводы с площадки.</p>':''}</div>`;
   // по месяцам
   const months={};base.forEach(t=>{const f=flow(t);if(!f)return;const m=months[ymd(t.date)]=months[ymd(t.date)]||{in:0,out:0};m.in+=f.i;m.out+=f.o});
   const mk=Object.keys(months).sort();let cum=0;const mrows=mk.map(k=>{cum+=months[k].in-months[k].out;return{k,...months[k],cum}}).reverse();
@@ -806,7 +851,7 @@ function txLine(p,t){
   if(t.type==='revalue')return`${esc(t.asset)}: стоимость ${usd(num(t.value))}, ${esc(locName(p,t.loc))}${t.note?', '+esc(t.note):''}`;
   const a=aq(num(t.qty),t.asset);
   if(t.type==='swap')return`${a} → ${aq(num(t.toQty),t.toAsset)}, ${esc(locName(p,t.loc))}`;
-  if(t.type==='transfer')return`${a}: ${esc(locName(p,t.loc))} → ${esc(locName(p,t.toLoc))}`;
+  if(t.type==='transfer')return`${a}: ${esc(locName(p,t.loc))} → ${esc(locName(p,t.toLoc))}${num(t.price)>0&&!isDollarA(t.asset)?', курс '+up(num(t.price)):''}`;
   return`${a}, ${esc(locName(p,t.loc))}${t.note?', '+esc(t.note):''}`;
 }
 function assetOpts(sel,filter){return Object.keys(S.assets).filter(k=>!filter||filter(k)).map(k=>`<option value="${k}" ${k===sel?'selected':''}>${k}</option>`).join('')}
@@ -821,17 +866,17 @@ function txForm(t){
   if(ty==='revalue'&&!usdKeys.length)return`<form id="txf" onsubmit="return false"><div class="field"><label>Тип операции</label><select class="inp" name="type" data-rerender>${Object.entries(TX_TYPES).map(([k,v])=>`<option value="${k}" ${k===ty?'selected':''}>${v}</option>`).join('')}</select></div><div class="callout teal">Переоценка нужна для своих позиций, которые ведутся в долларах: опционные конструкции, маржинальный буфер, кэш-резерв. Добавьте такую позицию: Настройки → «Добавить актив» → «Своя позиция».</div></form>`;
   let h=`<form id="txf" onsubmit="return false"><input type="hidden" name="id" value="${t.id||''}">
   <div class="field"><label>Тип операции</label><select class="inp" name="type" data-rerender>${Object.entries(TX_TYPES).map(([k,v])=>`<option value="${k}" ${k===ty?'selected':''}>${v}</option>`).join('')}</select></div>
-  <div class="small muted" style="margin:-4px 0 12px">${{buy:'Новые деньги клиента заходят в актив – учитывается как вложение.',sell:'Актив продан и выведен из портфеля в реальную жизнь.',swap:'Один актив обменян на другой внутри портфеля, деньги не заходят и не выходят.',income:'Проценты лендинга, стейкинг, премия опционов, прибыль бота – это заработок, не вложение.',transfer:'Перенос актива с одной площадки на другую.',revalue:'Укажите, сколько позиция стоит сейчас. Разница с прошлой стоимостью станет прибылью или убытком, вложения не меняются.'}[ty]}</div>
+  <div class="small muted" style="margin:-4px 0 12px">${{buy:'Новые деньги клиента заходят в актив – учитывается как вложение.',sell:'Актив продан и выведен из портфеля в реальную жизнь.',swap:'Один актив обменян на другой внутри портфеля, деньги не заходят и не выходят.',income:'Проценты лендинга, стейкинг, премия опционов, прибыль бота – это заработок, не вложение.',transfer:'Перенос актива с одной площадки на другую. Стоимость считается по курсу на дату перевода.',revalue:'Укажите, сколько позиция стоит сейчас. Разница с прошлой стоимостью станет прибылью или убытком, вложения не меняются.'}[ty]}</div>
   <div class="grid2"><div class="field"><label>Дата</label><input class="inp" type="date" name="date" value="${t.date||today()}"></div>
   <div class="field"><label>${ty==='swap'?'Отдаю актив':'Актив'}</label><select class="inp" name="asset" data-rerender>${assetOpts(a0,ty==='revalue'?isUsdA:null)}</select></div></div>
   ${ty==='revalue'?`<div class="field"><label>Сколько позиция стоит сейчас (остаток), $</label><input class="inp" inputmode="decimal" name="value" value="${t.value??''}" data-rv></div>`:`<div class="grid2"><div class="field"><label>${isU?'Сумма, $':'Количество'}</label><input class="inp" inputmode="decimal" name="qty" value="${t.qty??''}" placeholder="${isU?'1000':'0.05'}" data-calc="qty"></div>
-  ${ty==='swap'||ty==='transfer'||isU?`<input type="hidden" name="price" value="${pr}"><div></div>`:`<div class="field"><label>Цена за 1, $</label><input class="inp" inputmode="decimal" name="price" value="${pr}" data-calc="price"></div>`}</div>
+  ${ty==='transfer'&&!isDollarA(a0)?`<div class="field"><label>Курс на дату перевода, $</label><input class="inp" inputmode="decimal" name="price" value="${t.price??((t.date||today())>=today()?(S.prices[a0]||''):'')}" data-tp="auto" placeholder="загружаю курс…"></div>`:ty==='swap'||ty==='transfer'||isU?`<input type="hidden" name="price" value="${pr}"><div></div>`:`<div class="field"><label>Цена за 1, $</label><input class="inp" inputmode="decimal" name="price" value="${pr}" data-calc="price"></div>`}</div>
   ${['buy','sell','income'].includes(ty)&&!isU?`<div class="field"><label>Сумма сделки, $</label><input class="inp" inputmode="decimal" name="total" value="${t.total??t.value??''}" data-calc="total" placeholder="сколько вложено или получено"></div>`:''}`}
   <div class="field"><label>${ty==='transfer'?'Откуда':'Площадка'}</label><select class="inp" name="loc" data-newsel="loc">${locOpts(p,t.loc)}</select></div>${newLoc('loc',t.loc)}`;
   if(ty==='swap'){h+=`<div class="grid2"><div class="field"><label>Получаю актив</label><select class="inp" name="toAsset" data-rerender>${assetOpts(t.toAsset||'USDT')}</select></div><div class="field"><label>Количество</label><input class="inp" inputmode="decimal" name="toQty" value="${t.toQty??''}" data-calc="toQty"></div></div>
    ${isDollarA(a0)||isDollarA(t.toAsset||'USDT')?`<input type="hidden" name="value" value="${t.value??''}"><p class="small muted" style="margin:-4px 0 12px">Сумма сделки в $ считается по стейблкоину автоматически.</p>`:`<div class="field"><label>Сумма сделки, $ на дату обмена</label><input class="inp" inputmode="decimal" name="value" value="${t.value??''}" placeholder="если пусто – по текущему курсу" data-calc="value"></div>`}`}
   if(ty==='revalue')h+=rvBlock(p,{...t,asset:a0});
-  if(ty==='transfer'){h+=`<div class="field"><label>Куда</label><select class="inp" name="toLoc" data-newsel="toLoc">${locOpts(p,t.toLoc)}</select></div>${newLoc('toLoc',t.toLoc)}<div class="field"><label>Комиссия сети, в штуках актива</label><input class="inp" inputmode="decimal" name="fee" value="${t.fee??''}" placeholder="0"></div>`}
+  if(ty==='transfer'){h+=`<div class="field"><label>Куда</label><select class="inp" name="toLoc" data-newsel="toLoc">${locOpts(p,t.toLoc)}</select></div>${newLoc('toLoc',t.toLoc)}<div class="field"><label>Комиссия сети, в штуках актива</label><input class="inp" inputmode="decimal" name="fee" value="${t.fee??''}" placeholder="0"></div><div id="trInfo" class="callout teal small" style="margin:0 0 12px;${trInfoHtml({...t,asset:a0})?'':'display:none'}">${trInfoHtml({...t,asset:a0})}</div>`}
   h+=`${ty==='revalue'||ty==='transfer'||ty==='income'?'':`<div id="txInfo" class="callout teal small" style="margin:0 0 12px;${txInfoHtml({...t,asset:a0,type:ty})?'':'display:none'}">${txInfoHtml({...t,asset:a0,type:ty})}</div>`}<div class="field"><label>Заметка</label><input class="inp" name="note" value="${esc(t.note||'')}" placeholder="необязательно"></div>
   <div class="btns"><button class="btn primary" data-a="saveTx">${t.id?'Сохранить':'Добавить'}</button>${t.id?'<button class="btn danger" data-a="delTx">Удалить</button>':''}</div></form>`;
   return h;
@@ -1182,8 +1227,8 @@ const A={
   demo:()=>loadDemo(),
   openAsset:d=>{if(TAB!=='assets'){TAB='assets';OPEN_ASSET=d.k}else OPEN_ASSET=OPEN_ASSET===d.k?null:d.k;render()},
   addTx:()=>openSheet('Новая операция',txForm({})),
-  editTx:d=>{const t=P().txs.find(x=>x.id===d.k);if(!t)return;if(t.type==='borrow'||t.type==='repay')return openSheet('Операция по займу',loanTxForm(t));openSheet('Операция',txForm({...t}))},
-  saveTx:()=>{
+  editTx:d=>{const t=P().txs.find(x=>x.id===d.k);if(!t)return;if(t.type==='borrow'||t.type==='repay')return openSheet('Операция по займу',loanTxForm(t));openSheet('Операция',txForm({...t}));if(t.type==='transfer')fillTrPrice(false)},
+  saveTx:async()=>{
     const p=P();const o=readForm('#txf');const qty=num(o.qty);
     if(o.type==='revalue'){if(!isUsdA(o.asset))return toast('Выберите свою позицию');const lc=ensureLoc(p,o,'loc');if(!lc)return toast('Выберите или назовите площадку');if(String(o.value||'').trim()==='')return toast('Укажите текущую стоимость');
       const t={id:o.id||uid(),type:'revalue',date:o.date||today(),asset:o.asset,loc:lc,qty:0,value:r2(Math.max(0,num(o.value))),note:o.note||''};
@@ -1195,7 +1240,11 @@ const A={
     const t={id:o.id||uid(),type:o.type,date:o.date||today(),asset:o.asset,qty,loc,note:o.note||''};
     if(['buy','sell','income'].includes(o.type)){const tot=isUsdA(o.asset)?0:num(o.total);const pr=isUsdA(o.asset)?1:(num(o.price)||(tot>0?tot/qty:0));if(!(pr>0))return toast('Укажите цену за 1 или сумму сделки');t.value=r2(tot>0?tot:pr*qty);t.price=t.value/qty}
     if(o.type==='swap'){t.toAsset=o.toAsset;t.toQty=num(o.toQty);if(!(t.toQty>0))return toast('Укажите, сколько получено');t.toLoc=loc;t.value=swapValue(o);if(!t.value)return toast('Укажите сумму сделки в $')}
-    if(o.type==='transfer'){const to=ensureLoc(p,o,'toLoc');if(!to)return toast('Куда переводим?');t.toLoc=to;t.fee=num(o.fee);t.value=0}
+    if(o.type==='transfer'){const to=ensureLoc(p,o,'toLoc');if(!to)return toast('Куда переводим?');if(to===loc)return toast('Площадки «откуда» и «куда» совпадают');t.toLoc=to;t.fee=num(o.fee);
+      let pr=isDollarA(o.asset)?await histPrice(o.asset,t.date):num(o.price);
+      if(!(pr>0)){toast('Загружаю курс на дату…');pr=await histPrice(o.asset,t.date)}
+      if(!(pr>0))return toast('Укажите курс на дату перевода');
+      t.price=pr;t.value=r2(qty*pr)}
     const i=p.txs.findIndex(x=>x.id===t.id);if(i>=0)p.txs[i]=t;else p.txs.push(t);
     closeSheet();save();haptic();toast(i>=0?'Сохранено':'Операция добавлена');
   },
@@ -1283,7 +1332,8 @@ document.addEventListener('change',e=>{
   const el=e.target;const p=P();
   if(el.dataset.w!==undefined){W.d[el.dataset.w]=num(el.value);render();return}
   if(el.dataset.al){const al=W?W.d.alloc:p.plan.alloc;const a=al[+el.dataset.i];if(el.dataset.al==='k')a.k=el.value;else a.pct=num(el.value);if(W)render();else{save({silent:true});A.editAlloc()}return}
-  if(el.dataset.rerender!==undefined){const o=readForm('#txf');if(el.name==='asset'){o.price=S.prices[o.asset]||''}if(el.name==='type'&&o.type==='revalue'&&!isUsdA(o.asset))o.asset=null;openSheet(o.id?'Операция':'Новая операция',txForm(o));return}
+  if(el.dataset.rerender!==undefined){const o=readForm('#txf');if(el.name==='asset'){o.price=S.prices[o.asset]||''}if(o.type==='transfer'&&(el.name==='asset'||el.name==='type')){o.price=(o.date||today())>=today()?(S.prices[o.asset]||''):''}if(el.name==='type'&&o.type==='revalue'&&!isUsdA(o.asset))o.asset=null;openSheet(o.id?'Операция':'Новая операция',txForm(o));if(o.type==='transfer')fillTrPrice(false);return}
+  if(el.name==='date'&&el.closest('#txf')&&readForm('#txf').type==='transfer'){fillTrPrice(true);return}
   if(el.dataset.newsel&&el.closest('#txf')&&readForm('#txf').type==='revalue'&&el.value!=='__new'){const o=readForm('#txf');o.fund='';openSheet(o.id?'Операция':'Новая операция',txForm(o));return}
   if(el.dataset.newsel){const box=document.querySelector(`[data-newloc="${el.dataset.newsel}"]`);if(box)box.hidden=el.value!=='__new';return}
   if(el.dataset.pf){p[el.dataset.pf]=el.value;save();return}
@@ -1304,6 +1354,7 @@ document.addEventListener('input',e=>{
   const el=e.target;
   if(el.id==='srQ'){SEARCH_Q=el.value.trim();clearTimeout(SEARCH_T);SEARCH_T=setTimeout(()=>searchCoins(SEARCH_Q),350);return}
   if(el.dataset.w!==undefined&&W&&W.step===0){W.d[el.dataset.w]=num(el.value);const c=$('#wcalc');if(c)c.innerHTML=wizCalc(W.d,planCalc(W.d))}
+  if(el.closest&&el.closest('#txf')&&el.form&&el.form.elements.type&&el.form.elements.type.value==='transfer'){if(el.dataset.tp!==undefined)el.dataset.tp='manual';updTrInfo()}
   if(el.dataset.rv!==undefined&&el.closest('#txf')){const box=$('#rvInfo');if(box)box.innerHTML=rvInfoHtml(P(),readForm('#txf'))}
   if(el.dataset.calc&&el.closest('#txf')){const f=el.closest('#txf').elements;const q=num(f.qty&&f.qty.value),pr=num(f.price&&f.price.value),tot=num(f.total&&f.total.value);
     if(f.total&&(el.dataset.calc==='qty'||el.dataset.calc==='price')&&q>0&&pr>0)f.total.value=r2(q*pr);
@@ -1326,6 +1377,7 @@ document.addEventListener('input',e=>{
   else if(local&&S.seenVersion!==APP_VERSION){const from=S.seenVersion;S.seenVersion=APP_VERSION;save({silent:true});openSheet('Что нового',(S.fixCount?`<div class="callout teal">Пересчитано обменов со стейблкоинами: ${S.fixCount}. Средние цены теперь верные.</div>`:'')+whatsNewHtml(from||'1.0.0'));S.fixCount=0}
   refreshPrices(false);
   initCloud();
+  setTimeout(priceTransfers,1500);
   setInterval(()=>refreshPrices(false),5*60*1000);
 })();
 </script>
