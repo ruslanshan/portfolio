@@ -144,8 +144,9 @@ table.t td.n,table.t th.n{text-align:right;white-space:nowrap}
 
 <script>
 /* ===================== версия ===================== */
-const APP_VERSION='1.5.7';
+const APP_VERSION='1.5.8';
 const CHANGELOG=[
+ {v:'1.5.8',d:'02.10.2026',items:['Комиссия за месяц: капитал на начало и на конец теперь считается автоматически по операциям клиента и курсам активов на 1-е число месяца и следующего месяца','Пополнения и выводы за месяц подтягиваются из операций, видно отдельно сколько внесено и сколько выведено','Раскрывающийся блок «Как посчитан капитал»: по каждому активу количество × курс на дату','По умолчанию открывается прошлый месяц, если за него ещё нет начисления. Будущий месяц начислить нельзя','Курсы на дату загружаются одним запросом на актив – быстрее и надёжнее']},
  {v:'1.5.7',d:'02.10.2026',items:['Клиенты: новый блок «Комиссии по месяцам» – сколько начислено и сколько получено в каждом месяце по всем клиентам, долг на конец месяца, раскрытие по клиентам','Оплата комиссии записывается с датой и суммой, можно отмечать частичные оплаты. «Получено» считается по дате оплаты','Справка «Как считается комиссия» с текущими ставками клиента','Расчёт за прошлый месяц: если нет снимка капитала, приложение предупреждает и берёт ближайший снимок к концу месяца','Отчёт теперь можно сделать и по своему портфелю – кнопка на «Обзоре» и в «Клиентах». В отчёте появились итоги текущего месяца и площадки','Отчёт можно отправить себе в чат с ботом (нужно обновить код сервера бота)']},
  {v:'1.5.6',d:'01.10.2026',items:['Перевод между площадками теперь оценивается по курсу актива на дату перевода, а не по средней цене покупки. Итоги, движение по месяцам и результат площадки считаются верно','В форме перевода курс на дату подтягивается сам, его можно поправить вручную','Старые переводы пересчитаны по историческому курсу автоматически','В хронологии у перевода видны курс и стоимость в долларах']},
  {v:'1.5.5',d:'23.09.2026',items:['Переоценка показывает, сколько позиция стоила до и сколько станет, и какой получится результат','Если деньги на позицию пришли в стейблкоинах (например, USDT на бирже как маржа фьючерсов), при переоценке их можно сразу перенести в позицию – тогда результат площадки считается верно','Переоценка всегда применяется после других операций того же дня']},
@@ -277,6 +278,14 @@ function ledger(p,prices,until){
 const HIST={},HIST_FAIL={};
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 // цена 1 единицы актива в $ на дату (YYYY-MM-DD): CoinGecko history, запасной вариант – дневная свеча Binance
+// дневные курсы за год одним запросом на актив (точки на 00:00 UTC), кэш на сессию
+const SERIES={};
+function cgSeries(cg){
+  if(!SERIES[cg])SERIES[cg]=fetchT(`https://api.coingecko.com/api/v3/coins/${encodeURIComponent(cg)}/market_chart?vs_currency=usd&days=365&interval=daily`,12000)
+    .then(j=>{const m={};(j&&j.prices||[]).forEach(([ts,pr])=>{const d=new Date(ts).toISOString().slice(0,10);if(!(d in m)&&pr>0)m[d]=pr});return Object.keys(m).length?m:null})
+    .catch(()=>null).then(m=>{if(!m)setTimeout(()=>{delete SERIES[cg]},60000);return m});
+  return SERIES[cg];
+}
 async function histPrice(a,date){
   const as=S.assets[a];if(!as)return null;
   if(isUsdA(a))return 1;
@@ -284,7 +293,7 @@ async function histPrice(a,date){
   if(!date||date>=today())return S.prices[a]||null;
   const k=a+'|'+date;if(HIST[k])return HIST[k];
   let pr=null;
-  if(as.cg){try{const [y,m,d]=date.split('-');const j=await fetchT(`https://api.coingecko.com/api/v3/coins/${encodeURIComponent(as.cg)}/history?date=${d}-${m}-${y}&localization=false`,10000);pr=(j&&j.market_data&&j.market_data.current_price&&j.market_data.current_price.usd)||null}catch(e){}}
+  if(as.cg){const ser=await cgSeries(as.cg);if(ser)pr=ser[date]||null;else{try{const [y,m,d]=date.split('-');const j=await fetchT(`https://api.coingecko.com/api/v3/coins/${encodeURIComponent(as.cg)}/history?date=${d}-${m}-${y}&localization=false`,10000);pr=(j&&j.market_data&&j.market_data.current_price&&j.market_data.current_price.usd)||null}catch(e){}}}
   if(!pr&&/^[A-Z0-9]{2,10}$/.test(a)){try{const t0=Date.parse(date+'T00:00:00Z');const j=await fetchT(`https://api.binance.com/api/v3/klines?symbol=${a}USDT&interval=1d&startTime=${t0}&limit=1`,8000);if(Array.isArray(j)&&j[0]&&j[0][0]===t0)pr=num(j[0][1])||null}catch(e){}}
   if(pr)HIST[k]=pr;return pr;
 }
@@ -1093,7 +1102,7 @@ function feeHelpHtml(p){
   <h3 style="margin:4px 0 6px">1. Ставки</h3><p style="margin:0 0 10px">Уровень выбирается по капиталу клиента на конец месяца. Ставки клиента «${esc(p.name)}»: ${t.map(x=>`от ${money(x.from,{dec:0})} – management ${P_(x.mgmt)}, performance ${P_(x.perf)}`).join('; ')}. ${per}</p>
   <h3 style="margin:0 0 6px">2. Management fee</h3><p style="margin:0 0 10px">Плата за управление, берётся от капитала на конец месяца (стоимость активов по текущим ценам минус долги по займам). ${f.mode==='progressive'?'Режим «ступенчато»: каждая часть капитала идёт по ставке своего уровня, поэтому при переходе порога комиссия не проседает.':'Режим «весь капитал по ставке уровня»: весь капитал считается по ставке уровня, в который он попал. На пороге комиссия может уменьшиться при росте капитала – чтобы этого не было, выберите режим «ступенчато».'}</p>
   <h3 style="margin:0 0 6px">3. Performance fee</h3><p style="margin:0 0 10px">Прибыль за месяц = капитал на конец − капитал на начало − (пополнения − выводы). Новые деньги клиента прибылью не считаются. Ставка берётся по уровню капитала на конец месяца. ${f.hwm?`High-water mark включён: комиссия берётся только с прибыли выше прошлого пика (пик сдвигается на пополнения и выводы). После расчёта пик поднимается до капитала на конец, если тот выше. Текущий пик: ${p.hwm!=null?money(p.hwm):'появится после первого расчёта'}. Если месяц был убыточным, комиссия не берётся, пока капитал не превысит пик.`:'High-water mark выключен: комиссия берётся с любой положительной прибыли за месяц, в том числе с восстановления после убыточного месяца.'}</p>
-  <h3 style="margin:0 0 6px">4. Расчёт за месяц</h3><p style="margin:0 0 10px">«Капитал на начало» – конец прошлого начисления, иначе снимок капитала до начала месяца. «Капитал на конец» – для текущего месяца сейчас, для прошлого – снимок, ближайший к концу месяца. «Пополнения минус выводы» – покупки минус продажи за месяц. Все поля можно поправить. Комиссия из капитала клиента не вычитается – клиент оплачивает её отдельно.</p>
+  <h3 style="margin:0 0 6px">4. Расчёт за месяц</h3><p style="margin:0 0 10px">Выберите месяц – приложение само посчитает капитал на начало и на конец: берёт все операции клиента до этой даты и оценивает активы по курсам на 00:00 UTC 1-го числа месяца и 1-го числа следующего месяца. Для текущего месяца капитал на конец – на сегодня. «Пополнения минус выводы» – покупки (новые деньги клиента) минус продажи (выводы) за месяц. В блоке «Как посчитан капитал» видно количество и курс каждого актива. Все суммы можно поправить. Комиссия из капитала клиента не вычитается – клиент оплачивает её отдельно.</p>
   <h3 style="margin:0 0 6px">5. Оплата и статистика</h3><p style="margin:0">Нажмите на статус в таблице «Начисления» и укажите дату и сумму поступления, можно частями. В блоке «Комиссии по месяцам» видно, сколько начислено за каждый месяц и сколько денег пришло в этом месяце по дате оплаты, а также долг клиентов на конец месяца.</p></div>
   <div class="btns"><button class="btn primary" data-a="closeSheet">Понятно</button></div>`;
 }
@@ -1107,28 +1116,69 @@ function feeCfgHtml(p){
   <div class="field"><label>High-water mark</label><select class="inp" data-fee="hwm"><option value="1" ${f.hwm?'selected':''}>да – performance fee только с прибыли выше прошлого пика</option><option value="0" ${!f.hwm?'selected':''}>нет – с любой прибыли за месяц</option></select></div>
   <div class="btns"><button class="btn primary" data-a="closeSheet">Готово</button></div>`;
 }
-function monthDefaults(p,ym){
-  const start=ym+'-01';const L=ledger(p,S.prices);const notes=[];
-  const prevRec=p.feeRecs.filter(r=>r.period<ym).sort((a,b)=>a.period<b.period?1:-1)[0];
-  const before=p.snaps.filter(s=>s.d<start).slice(-1)[0];
-  let s;if(prevRec)s=prevRec.end;else if(before)s=before.v;else{s=ledger(p,S.prices,new Date(new Date(start)-864e5).toISOString().slice(0,10)).net;if(s>0)notes.push('Нет снимка капитала на начало месяца – подставлены чистые вложения. Проверьте «Капитал на начало».')}
-  const cur=today().slice(0,7);let e;
-  if(ym>=cur)e=L.value;
-  else{const nx=new Date(Date.UTC(+ym.slice(0,4),+ym.slice(5,7),1));const next=nx.toISOString().slice(0,10);const end=new Date(nx-864e5).toISOString().slice(0,10);const lim=new Date(+nx+6*864e5).toISOString().slice(0,10);
-    const dist=d=>Math.abs(new Date(d)-new Date(end))/864e5;
-    const c=[p.snaps.filter(x=>ymd(x.d)===ym).slice(-1)[0],p.snaps.find(x=>x.d>=next&&x.d<=lim)].filter(Boolean).sort((a,b)=>dist(a.d)-dist(b.d))[0];
-    if(c){e=c.v;if(dist(c.d)>1)notes.push(`Капитал на конец взят по снимку от ${ddmm(c.d)} – ближайшему к концу месяца. Если знаете точную сумму на ${ddmm(end)}, впишите её.`)}
-    else{e=L.value;notes.push('За этот месяц нет снимка капитала – подставлен текущий капитал. Впишите капитал на конец месяца вручную, иначе комиссия посчитается неверно.')}}
-  return{start:r2(s),end:r2(e),flows:r2(flowsIn(p,ym)),notes};
+/* капитал клиента на момент d (YYYY-MM-DD, 00:00 UTC): операции до d, курсы на d */
+const prevDay=d=>new Date(Date.parse(d+'T00:00:00Z')-864e5).toISOString().slice(0,10);
+const nextMonth1=ym=>new Date(Date.UTC(+ym.slice(0,4),+ym.slice(5,7),1)).toISOString().slice(0,10);
+function capRows(L){const m={};L.pos.forEach(x=>{const r=m[x.asset]=m[x.asset]||{asset:x.asset,qty:0,price:x.price,value:0};r.qty+=x.qty;r.value+=x.value});return Object.values(m).filter(r=>Math.abs(r.value)>0.005||Math.abs(r.qty)>1e-9).sort((a,b)=>b.value-a.value)}
+async function capitalAt(p,d){
+  const until=prevDay(d);const L0=ledger(p,{},until);
+  const need=new Set(L0.pos.filter(x=>Math.abs(x.qty)>1e-12).map(x=>x.asset));
+  (p.loans||[]).forEach(l=>{if(p.txs.some(t=>t.loanId===l.id&&t.type==='borrow'&&t.date<=until)){need.add(l.debtAsset);need.add(l.collAsset)}});
+  const pr={};
+  for(const a of need){if(!a)continue;if(isUsdA(a)){pr[a]=1;continue}const v=await histPrice(a,d);if(v>0)pr[a]=v}
+  const L=ledger(p,pr,until);
+  return{v:r2(L.value),debt:L.debt,rows:capRows(L),miss:L.missing,d,live:d>=today()};
+}
+function capitalNow(p){const L=ledger(p,S.prices);return{v:r2(L.value),debt:L.debt,rows:capRows(L),miss:L.missing,d:today(),live:true,now:true}}
+async function monthAuto(p,ym){
+  const cur=today().slice(0,7);if(!/^\d{4}-\d{2}$/.test(ym||''))return null;
+  if(ym>cur)return{future:true,notes:['Этот месяц ещё не наступил – начислить комиссию за него нельзя. Выберите текущий или прошедший месяц.']};
+  const d0=ym+'-01',d1=nextMonth1(ym);
+  const s=await capitalAt(p,d0);const e=ym===cur?capitalNow(p):await capitalAt(p,d1);
+  const tx=p.txs.filter(t=>ymd(t.date)===ym);const dep=tx.filter(t=>t.type==='buy').reduce((a,t)=>a+num(t.value),0),wd=tx.filter(t=>t.type==='sell').reduce((a,t)=>a+num(t.value),0);
+  const notes=[];
+  if(ym===cur)notes.push('Месяц ещё идёт: капитал на конец взят на сегодня, по текущим курсам. Окончательно комиссию лучше считать после окончания месяца.');
+  const miss=[...new Set([...s.miss,...e.miss])];
+  if(miss.length)notes.push(`Не удалось получить курс на дату для: ${miss.map(esc).join(', ')}. Стоимость этих активов не учтена – выберите месяц заново чуть позже или впишите капитал вручную.`);
+  const pm=prevDay(d0).slice(0,7);
+  const prev=p.feeRecs.filter(r=>r.period===pm).slice(-1)[0];
+  if(prev&&Math.abs(num(prev.end)-s.v)>Math.max(1,s.v*0.005))notes.push(`В начислении за ${monthTitle(pm).toLowerCase()} капитал на конец был ${money(num(prev.end))}, а по операциям и курсам на ${ddmm(d0)} получается ${money(s.v)}. Подставлено значение по данным системы.`);
+  return{start:s.v,end:e.v,flows:r2(dep-wd),dep,wd,ndep:tx.filter(t=>t.type==='buy').length,nwd:tx.filter(t=>t.type==='sell').length,notes,s,e};
 }
 const cmNotes=n=>(n||[]).map(x=>`<div class="callout" style="margin:0 0 12px">${x}</div>`).join('');
+function capListHtml(c,title){
+  const line=r=>isUsdA(r.asset)?`<div class="row" style="padding:5px 0"><span class="grow">${esc(r.asset)}</span><span>${money(r.value)}</span></div>`:`<div class="row" style="padding:5px 0"><span class="grow">${esc(r.asset)}: ${qfmt(r.qty,r.asset)} × ${r.price?(isDollarA(r.asset)?usd(r.price,2):up(r.price)):'нет курса'}</span><span>${money(r.value)}</span></div>`;
+  return`<div class="small muted" style="margin:10px 0 4px">${title}</div>${c.rows.length?c.rows.map(line).join(''):'<div class="small muted">активов не было</div>'}${c.debt>0.01?`<div class="row" style="padding:5px 0"><span class="grow">Долг по займам</span><span class="down">−${money(c.debt)}</span></div>`:''}<div class="row" style="padding:5px 0"><b class="grow">Итого</b><b>${money(c.v)}</b></div>`}
+function cmDetailHtml(o){
+  if(!o||o.future)return'';
+  return`<details class="card small" style="margin:0 0 12px;padding:10px 14px"><summary style="cursor:pointer;font-weight:600">Как посчитан капитал</summary>
+  ${capListHtml(o.s,`На начало: позиции на конец ${ddmm(prevDay(o.s.d))}, курсы на ${ddmm(o.s.d)} 00:00 UTC`)}
+  ${capListHtml(o.e,o.e.now?'На конец: позиции и курсы на сегодня':`На конец: позиции на конец ${ddmm(prevDay(o.e.d))}, курсы на ${ddmm(o.e.d)} 00:00 UTC`)}
+  <div class="small muted" style="margin:10px 0 0">Пополнения: ${money(o.dep)}${o.ndep?` (${o.ndep} опер.)`:''}, выводы: ${money(o.wd)}${o.nwd?` (${o.nwd} опер.)`:''}. Курсы – CoinGecko (запасной источник – Binance), стейблкоины – по текущему курсу, свои позиции – по последней переоценке.</div></details>`}
+let CM_TOK=0,CM_T=null;
+async function fillMonth(){
+  const f=$('#cmf');if(!f)return;const p=P();const ym=f.elements.period.value;const tok=++CM_TOK;
+  const btn=f.querySelector('[data-a=saveMonth]');const box=['start','end','flows'].map(k=>f.elements[k]);
+  box.forEach(x=>{x.readOnly=true;x.style.opacity=.5});btn.disabled=true;$('#cmPrev').style.opacity=.4;$('#cmDetail').innerHTML='';
+  $('#cmNotes').innerHTML='<div class="callout teal small" style="margin:0 0 12px">Считаю капитал по операциям и курсам на даты…</div>';
+  let o=null;try{o=await monthAuto(p,ym)}catch(e){o=null}
+  if(tok!==CM_TOK||!document.body.contains(f))return;
+  box.forEach(x=>{x.style.opacity=''});$('#cmPrev').style.opacity='';
+  if(!o){$('#cmNotes').innerHTML=cmNotes(['Не удалось посчитать капитал автоматически. Проверьте месяц или впишите суммы вручную.']);box.forEach(x=>{x.readOnly=false});btn.disabled=false;return}
+  $('#cmNotes').innerHTML=cmNotes(o.notes);
+  if(o.future){box.forEach(x=>{x.value=''});$('#cmPrev').innerHTML='';return}
+  f.elements.start.value=o.start;f.elements.end.value=o.end;f.elements.flows.value=o.flows;box.forEach(x=>{x.readOnly=false});btn.disabled=false;
+  $('#cmDetail').innerHTML=cmDetailHtml(o);$('#cmPrev').innerHTML=cmPreview(p,feeCalc(p,o.start,o.end,o.flows));
+}
+function defaultFeeMonth(p){const cur=today().slice(0,7);const pm=prevDay(cur+'-01').slice(0,7);return!p.feeRecs.some(r=>r.period===pm)&&p.txs.some(t=>t.date<cur+'-01')?pm:cur}
 function closeMonthHtml(p,o){
-  const c=feeCalc(p,num(o.start),num(o.end),num(o.flows));
-  return`<form id="cmf" onsubmit="return false"><div class="field"><label>Месяц</label><input class="inp" type="month" name="period" value="${o.period}" data-cm="period"></div>
-  <div class="grid2"><div class="field"><label>Капитал на начало, $</label><input class="inp" inputmode="decimal" name="start" value="${o.start}" data-cm></div><div class="field"><label>Капитал на конец, $</label><input class="inp" inputmode="decimal" name="end" value="${o.end}" data-cm></div></div>
-  <div class="field"><label>Пополнения минус выводы за месяц, $</label><input class="inp" inputmode="decimal" name="flows" value="${o.flows}" data-cm></div>
-  <div id="cmNotes">${cmNotes(o.notes)}</div>
-  <div id="cmPrev">${cmPreview(p,c)}</div>
+  
+  return`<form id="cmf" onsubmit="return false"><div class="field"><label>Месяц</label><input class="inp" type="month" name="period" value="${o.period}" max="${today().slice(0,7)}" data-cm="period"></div>
+  <div class="grid2"><div class="field"><label>Капитал на начало, $</label><input class="inp" inputmode="decimal" name="start" value="${o.start??''}" data-cm></div><div class="field"><label>Капитал на конец, $</label><input class="inp" inputmode="decimal" name="end" value="${o.end??''}" data-cm></div></div>
+  <div class="field"><label>Пополнения минус выводы за месяц, $</label><input class="inp" inputmode="decimal" name="flows" value="${o.flows??''}" data-cm></div>
+  <p class="small muted" style="margin:-4px 0 12px">Капитал на начало и на конец считается автоматически по операциям клиента и курсам активов на 1-е число. Суммы можно поправить вручную.</p>
+  <div id="cmNotes">${cmNotes(o.notes)}</div><div id="cmDetail"></div>
+  <div id="cmPrev"></div>
   <div class="btns"><button class="btn gold" data-a="saveMonth">Начислить</button></div></form>`;
 }
 function cmPreview(p,c){return`<div class="card"><div class="kv">
@@ -1336,8 +1386,8 @@ const A={
   feeCfg:()=>openSheet('Ставки и уровни',feeCfgHtml(P())),
   tierAdd:()=>{const p=P();const last=p.fees.tiers[p.fees.tiers.length-1];p.fees.tiers.push({from:(last.from||0)+100000,mgmt:last.mgmt,perf:last.perf});save({silent:true});openSheet('Ставки и уровни',feeCfgHtml(p))},
   tierDel:d=>{const p=P();p.fees.tiers.splice(+d.i,1);save({silent:true});openSheet('Ставки и уровни',feeCfgHtml(p))},
-  closeMonth:()=>{const p=P();const ym=today().slice(0,7);openSheet('Комиссия за месяц',closeMonthHtml(p,{period:ym,...monthDefaults(p,ym)}))},
-  saveMonth:async()=>{const p=P();const o=readForm('#cmf');if(p.feeRecs.some(r=>r.period===o.period)&&!await ask('За этот месяц уже есть начисление. Добавить ещё одно?','Добавить'))return;
+  closeMonth:()=>{const p=P();openSheet('Комиссия за месяц',closeMonthHtml(p,{period:defaultFeeMonth(p)}));fillMonth()},
+  saveMonth:async()=>{const p=P();const o=readForm('#cmf');if(!/^\d{4}-\d{2}$/.test(o.period||''))return toast('Выберите месяц');if(o.period>today().slice(0,7))return toast('Этот месяц ещё не наступил');if(String(o.start).trim()===''||String(o.end).trim()==='')return toast('Дождитесь расчёта капитала или впишите суммы');if(p.feeRecs.some(r=>r.period===o.period)&&!await ask('За этот месяц уже есть начисление. Добавить ещё одно?','Добавить'))return;
     const c=feeCalc(p,num(o.start),num(o.end),num(o.flows));
     p.feeRecs.push({id:uid(),period:o.period,start:num(o.start),end:num(o.end),flows:num(o.flows),profit:r2(c.profit),mf:r2(c.mf),pf:r2(c.pf),mgmtRate:c.tier.mgmt,perfRate:c.tier.perf,hwmBefore:p.hwm,paid:false,pays:[]});syncPaid(p.feeRecs[p.feeRecs.length-1]);
     p.feeRecs.sort((a,b)=>a.period<b.period?-1:1);if(p.fees.hwm)p.hwm=r2(c.newHwm);closeSheet();save();haptic();toast('Комиссия начислена')},
@@ -1437,7 +1487,7 @@ document.addEventListener('input',e=>{
     if(f.total&&(el.dataset.calc==='qty'||el.dataset.calc==='price')&&q>0&&pr>0)f.total.value=r2(q*pr);
     if(el.dataset.calc==='total'&&tot>0){if(q>0)f.price.value=+(tot/q).toPrecision(8);else if(pr>0)f.qty.value=+(tot/pr).toPrecision(8)}
     const box=$('#txInfo');if(box){const html=txInfoHtml(readForm('#txf'));box.innerHTML=html;box.style.display=html?'':'none'}}
-  if(el.dataset.cm!==undefined){const p=P();const f=$('#cmf');if(el.dataset.cm==='period'){const o={period:el.value,...monthDefaults(p,el.value)};['start','end','flows'].forEach(k=>f.elements[k].value=o[k]);$('#cmNotes').innerHTML=cmNotes(o.notes)}
+  if(el.dataset.cm!==undefined){const p=P();if(el.dataset.cm==='period'){clearTimeout(CM_T);CM_T=setTimeout(fillMonth,450);return}
     const o=readForm('#cmf');$('#cmPrev').innerHTML=cmPreview(p,feeCalc(p,num(o.start),num(o.end),num(o.flows)))}
 });
 
