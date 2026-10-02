@@ -144,8 +144,9 @@ table.t td.n,table.t th.n{text-align:right;white-space:nowrap}
 
 <script>
 /* ===================== версия ===================== */
-const APP_VERSION='1.5.6';
+const APP_VERSION='1.5.7';
 const CHANGELOG=[
+ {v:'1.5.7',d:'02.10.2026',items:['Клиенты: новый блок «Комиссии по месяцам» – сколько начислено и сколько получено в каждом месяце по всем клиентам, долг на конец месяца, раскрытие по клиентам','Оплата комиссии записывается с датой и суммой, можно отмечать частичные оплаты. «Получено» считается по дате оплаты','Справка «Как считается комиссия» с текущими ставками клиента','Расчёт за прошлый месяц: если нет снимка капитала, приложение предупреждает и берёт ближайший снимок к концу месяца','Отчёт теперь можно сделать и по своему портфелю – кнопка на «Обзоре» и в «Клиентах». В отчёте появились итоги текущего месяца и площадки','Отчёт можно отправить себе в чат с ботом (нужно обновить код сервера бота)']},
  {v:'1.5.6',d:'01.10.2026',items:['Перевод между площадками теперь оценивается по курсу актива на дату перевода, а не по средней цене покупки. Итоги, движение по месяцам и результат площадки считаются верно','В форме перевода курс на дату подтягивается сам, его можно поправить вручную','Старые переводы пересчитаны по историческому курсу автоматически','В хронологии у перевода видны курс и стоимость в долларах']},
  {v:'1.5.5',d:'23.09.2026',items:['Переоценка показывает, сколько позиция стоила до и сколько станет, и какой получится результат','Если деньги на позицию пришли в стейблкоинах (например, USDT на бирже как маржа фьючерсов), при переоценке их можно сразу перенести в позицию – тогда результат площадки считается верно','Переоценка всегда применяется после других операций того же дня']},
  {v:'1.5.4',d:'23.09.2026',items:['В «Истории» при выборе площадки итоги считаются по этой площадке: что куплено на ней, что пришло переводами с других площадок, что продано и выведено','Для площадки видно, сколько на ней сейчас и какой на ней результат','«Взносы по месяцам» и «Куда вложено» для площадки тоже учитывают переводы']},
@@ -207,7 +208,8 @@ const LS_KEY='kapital.v1';
 let dbRef=null,dbTimer=null;
 function loadLocal(){try{const j=localStorage.getItem(LS_KEY);if(j)return JSON.parse(j)}catch(e){}return null}
 function migrate(s){const d=defaultState();s.settings={...d.settings,...(s.settings||{})};s.removedAssets=s.removedAssets||[];s.locKinds=Array.isArray(s.locKinds)&&s.locKinds.length?s.locKinds:[...LOC_KINDS];const defs={};for(const k in d.assets)if(!s.removedAssets.includes(k))defs[k]=d.assets[k];s.assets={...defs,...(s.assets||{})};s.prices={...d.prices,...(s.prices||{})};s.chg=s.chg||{};
-  (s.portfolios||[]).forEach(p=>{const n=newPortfolio(p.name,p.owner);for(const k in n)if(p[k]===undefined)p[k]=n[k]});
+  (s.portfolios||[]).forEach(p=>{const n=newPortfolio(p.name,p.owner);for(const k in n)if(p[k]===undefined)p[k]=n[k];
+    (p.feeRecs||[]).forEach(r=>{if(!Array.isArray(r.pays))r.pays=r.paid&&num(r.mf)+num(r.pf)>0.004?[{id:uid(),d:'',amt:r2(num(r.mf)+num(r.pf))}]:[]})});
   if(!s.portfolios||!s.portfolios.length)s.portfolios=d.portfolios;if(!s.portfolios.find(p=>p.id===s.activeId))s.activeId=s.portfolios[0].id;return s}
 function save(opts){
   S.portfolios.forEach(snapshot);
@@ -465,6 +467,25 @@ function feeCalc(p,start,end,flows){
   const mf=mgmtFee(p,end);const pf=base*tier.perf/100;
   return{profit,base,mf,pf,total:mf+pf,tier,newHwm:Math.max(hwmAdj,end),ret:start>0?profit/start:null};
 }
+/* оплаты комиссий: r.pays=[{id,d:'YYYY-MM-DD',amt}] – «получено» считается по дате оплаты */
+const feeDue=r=>r2(num(r.mf)+num(r.pf));
+const feePaid=r=>r2((r.pays||[]).reduce((a,x)=>a+num(x.amt),0));
+const feeLeft=r=>Math.max(0,r2(feeDue(r)-feePaid(r)));
+const feeSt=r=>feeDue(r)<=0.004?'zero':feePaid(r)>=feeDue(r)-0.01?'paid':feePaid(r)>0.004?'part':'wait';
+const syncPaid=r=>{r.paid=['paid','zero'].includes(feeSt(r))};
+const MONTH_IN=['январе','феврале','марте','апреле','мае','июне','июле','августе','сентябре','октябре','ноябре','декабре'];
+const monthIn=ym=>MONTH_IN[+ym.slice(5,7)-1]+' '+ym.slice(0,4);
+const ddmm=d=>d?d.slice(8,10)+'.'+d.slice(5,7)+'.'+d.slice(0,4):'без даты';
+function feeMonths(){
+  const M={};const g=k=>M[k]=M[k]||{acc:0,mf:0,pf:0,got:0,recs:[],pays:[]};let nodate=0;const nodateList=[];
+  S.portfolios.filter(x=>!x.owner).forEach(p=>(p.feeRecs||[]).forEach(r=>{const m=g(r.period);m.acc+=feeDue(r);m.mf+=num(r.mf);m.pf+=num(r.pf);m.recs.push({p,r});
+    (r.pays||[]).forEach(x=>{if(!x.d){nodate+=num(x.amt);nodateList.push({p,r,x});return}const n=g(x.d.slice(0,7));n.got+=num(x.amt);n.pays.push({p,r,x})})}));
+  let acc=0,got=nodate;
+  const rows=Object.keys(M).sort().map(k=>{acc+=M[k].acc;got+=M[k].got;return{k,...M[k],debt:Math.max(0,r2(acc-got))}});
+  return{rows:rows.reverse(),nodate,nodateList};
+}
+const feeGot=(from,to)=>S.portfolios.filter(x=>!x.owner).reduce((s,p)=>s+(p.feeRecs||[]).reduce((a,r)=>a+(r.pays||[]).filter(x=>x.d&&x.d>=from&&x.d<=to).reduce((b,x)=>b+num(x.amt),0),0),0);
+const feeOwed=()=>S.portfolios.filter(x=>!x.owner).reduce((s,p)=>s+(p.feeRecs||[]).reduce((a,r)=>a+feeLeft(r),0),0);
 function flowsIn(p,ym){return p.txs.filter(t=>ymd(t.date)===ym).reduce((s,t)=>s+(t.type==='buy'?num(t.value):t.type==='sell'?-num(t.value):0),0)}
 
 /* ===================== стратегия ===================== */
@@ -657,7 +678,7 @@ function vHome(){
    <div class="legend">${ZORDER.map(k=>`<span><span class="dot" style="background:${ZONES[k].c}"></span>${ZONES[k].t}<br><b>${pct(sh[k])}</b> <span class="muted">${money(zv[k])}</span></span>`).join('')}</div>
    ${tz?`<div class="small muted" style="margin-top:4px">Чёрные риски – границы зон по стратегии: рост ${pct(tz.growth,{dec:0})}, доходность ${pct(tz.yield,{dec:0})}, стабильность ${pct(tz.stable,{dec:0})}</div>`:''}
   </div></section>${priceBanner(L)}`;
-  h+=`<div class="btns"><button class="btn primary" data-a="addTx">Добавить операцию</button><button class="btn" data-a="refresh">Обновить курсы</button></div>`;
+  h+=`<div class="btns"><button class="btn primary" data-a="addTx">Добавить операцию</button><button class="btn" data-a="refresh">Обновить курсы</button><button class="btn" data-a="report">Отчёт</button></div>`;
   {const risky=activeLoans(p).map(l=>({l,st:loanState(p,l,S.prices)})).filter(x=>x.st.hf<1.5);if(risky.length&&!L.missing.length)h+=`<div class="callout" style="border-color:var(--down)"><b>Займ под угрозой ликвидации.</b> ${risky.map(x=>`${esc(x.l.name)}: health factor ${nf(2).format(x.st.hf)}, ликвидация при ${esc(x.l.collAsset)} ${usd(x.st.liq)}`).join('; ')}. Добавьте залог или погасите часть долга. <button class="btn sm" data-a="goLoans">Займы</button></div>`}
   if(p.plan&&!L.missing.length){const R=rebalCalc(p,L);if(R&&R.total&&(R.outOfBand||R.due)&&R.trades.length)h+=`<div class="callout">${R.outOfBand?`${esc(keyName(R.worst.k))} ушёл от цели на ${nf(1).format(Math.abs(R.worst.dev*100))} п.п. – нужна внеплановая ребалансировка.`:'Подошёл срок плановой ребалансировки.'} <button class="btn sm" data-a="goRebal">Открыть</button></div>`}
   const ST0=assetStats(p);
@@ -1028,9 +1049,10 @@ function vClients(){
   let h=`<h2>Все портфели</h2><div class="list">${S.portfolios.map(x=>{const L=ledger(x,S.prices);return`<button class="row btnrow" data-a="pick" data-k="${x.id}" ${x.id===p.id?'style="background:var(--bg)"':''}><div class="grow"><b>${esc(x.name)}</b> ${x.owner?'<span class="pill">мой</span>':''}<div class="small muted">${x.contact?esc(x.contact)+', ':''}${x.plan?MODELS[x.plan.model].t:'без стратегии'}</div></div><div class="r"><b>${money(L.value)}</b><div class="small ${cls(L.pnl)}">${money(L.pnl,{sign:true})}</div></div></button>`}).join('')}</div>
   <div class="btns"><button class="btn primary" data-a="newClient">Добавить клиента</button></div>`;
   const clients=S.portfolios.filter(x=>!x.owner);
-  if(clients.length){const aum=clients.reduce((s,x)=>s+ledger(x,S.prices).value,0);const mf=clients.reduce((s,x)=>s+mgmtFee(x,ledger(x,S.prices).value),0);
-    h+=`<div class="card" style="margin-top:12px"><div class="kv"><span>Под управлением (AUM), ${clients.length} кл.</span><span class="v">${money(aum)}</span><span>Management fee за месяц</span><span class="v">${money(mf)}</span><span>Начислено всего</span><span class="v">${money(clients.reduce((s,x)=>s+x.feeRecs.reduce((a,r)=>a+r.mf+r.pf,0),0))}</span><span>Не оплачено</span><span class="v">${money(clients.reduce((s,x)=>s+x.feeRecs.filter(r=>!r.paid).reduce((a,r)=>a+r.mf+r.pf,0),0))}</span></div></div>`}
-  if(p.owner){h+=`<p class="muted small" style="margin-top:14px">Выберите клиента, чтобы настроить комиссии и увидеть начисления.</p>`;return h}
+  if(clients.length){const aum=clients.reduce((s,x)=>s+ledger(x,S.prices).value,0);const mf=clients.reduce((s,x)=>s+mgmtFee(x,ledger(x,S.prices).value),0);const ym=today().slice(0,7);
+    h+=`<div class="card" style="margin-top:12px"><div class="kv"><span>Под управлением (AUM), ${clients.length} кл.</span><span class="v">${money(aum)}</span><span>Management fee за месяц по текущему капиталу</span><span class="v">${money(mf)}</span><span>Получено в ${monthIn(ym)}</span><span class="v up">${money(feeGot(ym+'-01',ym+'-31'))}</span><span>Получено с начала года</span><span class="v">${money(feeGot(ym.slice(0,4)+'-01-01',ym.slice(0,4)+'-12-31'))}</span><span>Начислено всего</span><span class="v">${money(clients.reduce((s,x)=>s+x.feeRecs.reduce((a,r)=>a+feeDue(r),0),0))}</span><span>Ждёт оплаты</span><span class="v ${feeOwed()>0.004?'down':''}">${money(feeOwed())}</span></div></div>`;
+    h+=feeMonthsHtml()}
+  if(p.owner){h+=`<h2>Мой портфель</h2><div class="card"><p class="small muted" style="margin:0">Отчёт по своим инвестициям: стоимость, результат за всё время и за текущий месяц, активы, площадки${clients.length?', комиссии от клиентов':''}.</p><div class="btns"><button class="btn primary" data-a="report">Отчёт по моему портфелю</button></div></div><p class="muted small" style="margin-top:14px">Выберите клиента, чтобы настроить комиссии и увидеть начисления.</p>`;return h}
   const L=ledger(p,S.prices);const t=tierFor(p,L.value);
   h+=`<h2>${esc(p.name)}: комиссии</h2><div class="card"><div class="kv">
    <span>Активы под управлением (AUM)</span><span class="v">${money(L.value)}</span>
@@ -1038,11 +1060,42 @@ function vClients(){
    <span>Performance fee, текущий уровень</span><span class="v">${nf(2).format(t.perf)}% от прибыли</span>
    <span>Management fee за этот месяц</span><span class="v">${money(mgmtFee(p,L.value))}</span>
    <span>High-water mark</span><span class="v">${p.fees.hwm?(p.hwm!=null?money(p.hwm):'с первого расчёта'):'выключен'}</span>
-  </div><div class="btns"><button class="btn gold" data-a="closeMonth">Рассчитать комиссию за месяц</button><button class="btn" data-a="feeCfg">Ставки и уровни</button></div></div>`;
-  if(p.feeRecs.length){h+=`<h2>Начисления</h2><div class="card scroll"><table class="t"><thead><tr><th>Месяц</th><th class="n">AUM</th><th class="n">Прибыль</th><th class="n">Mgmt</th><th class="n">Perf</th><th class="n">Статус</th></tr></thead><tbody>${p.feeRecs.slice().reverse().map(r=>`<tr><td>${r.period}</td><td class="n">${money(r.end)}</td><td class="n ${cls(r.profit)}">${money(r.profit,{sign:true})}</td><td class="n">${money(r.mf)}</td><td class="n">${money(r.pf)}</td><td class="n"><button class="btn sm ${r.paid?'':'gold'}" data-a="togglePaid" data-k="${r.id}">${r.paid?'Оплачено':'Ждёт оплаты'}</button> <button class="btn sm" data-a="delFee" data-k="${r.id}" aria-label="Удалить запись">✕</button></td></tr>`).join('')}</tbody></table></div>`}
+  </div><div class="btns"><button class="btn gold" data-a="closeMonth">Рассчитать комиссию за месяц</button><button class="btn" data-a="feeCfg">Ставки и уровни</button><button class="btn" data-a="feeHelp">Как считается</button></div></div>`;
+  if(p.feeRecs.length){h+=`<h2>Начисления</h2><div class="card scroll"><table class="t"><thead><tr><th>Месяц</th><th class="n">AUM</th><th class="n">Прибыль</th><th class="n">Mgmt</th><th class="n">Perf</th><th class="n">Оплата</th></tr></thead><tbody>${p.feeRecs.slice().reverse().map(r=>`<tr><td>${r.period.slice(5)+'.'+r.period.slice(0,4)}</td><td class="n">${money(r.end)}</td><td class="n ${cls(r.profit)}">${money(r.profit,{sign:true})}</td><td class="n">${money(r.mf)}</td><td class="n">${money(r.pf)}</td><td class="n">${feeStBtn(r)} <button class="btn sm" data-a="delFee" data-k="${r.id}" aria-label="Удалить запись">✕</button></td></tr>`).join('')}</tbody></table><p class="small muted" style="margin:8px 0 0">Нажмите на статус оплаты, чтобы отметить поступление денег с датой и суммой.</p></div>`}
   h+=`<h2>Клиент</h2><div class="card"><div class="field"><label>Имя</label><input class="inp" data-pf="name" value="${esc(p.name)}"></div><div class="field"><label>Контакт (Telegram, телефон)</label><input class="inp" data-pf="contact" value="${esc(p.contact)}" placeholder="@username"></div><div class="field"><label>Заметка</label><input class="inp" data-pf="note" value="${esc(p.note)}"></div>
   <div class="btns"><button class="btn" data-a="report">Отчёт клиенту</button><button class="btn danger" data-a="delClient">Удалить клиента</button></div></div>`;
   return h;
+}
+function feeStBtn(r){const st=feeSt(r);const last=(r.pays||[]).filter(x=>x.d).map(x=>x.d).sort().pop();
+  const lbl=st==='paid'?`Оплачено${last?' '+last.slice(8,10)+'.'+last.slice(5,7):''}`:st==='part'?`Частично, ост. ${money(feeLeft(r))}`:st==='zero'?'Нет комиссии':'Ждёт оплаты';
+  return`<button class="btn sm ${st==='wait'||st==='part'?'gold':''}" data-a="payFee" data-k="${r.id}">${lbl}</button>`}
+let FEE_OPEN='';
+function feeMonthsHtml(){
+  const F=feeMonths();if(!F.rows.length&&!F.nodate)return'';
+  const det=r=>{const acc=r.recs.map(({p,r:x})=>`<div class="row" style="padding:6px 0"><div class="grow">${esc(p.name)}<div class="small muted">начислено за месяц: mgmt ${money(x.mf)}, perf ${money(x.pf)}</div></div><div class="r">${money(feeDue(x))}</div></div>`).join('');
+    const got=r.pays.slice().sort((a,b)=>a.x.d<b.x.d?-1:1).map(({p,r:x,x:y})=>`<div class="row" style="padding:6px 0"><div class="grow">${esc(p.name)}<div class="small muted">${ddmm(y.d)}, за ${monthTitle(x.period).toLowerCase()}</div></div><div class="r up">${money(num(y.amt))}</div></div>`).join('');
+    return`<tr><td colspan="4" style="background:var(--bg)">${acc?`<div class="small muted" style="margin-top:2px">Начислено за ${monthTitle(r.k).toLowerCase()}</div><div class="list">${acc}</div>`:''}${got?`<div class="small muted" style="margin-top:8px">Получено в этом месяце</div><div class="list">${got}</div>`:''}${!acc&&!got?'<span class="muted small">Движений нет</span>':''}</td></tr>`};
+  return`<h2>Комиссии по месяцам</h2><div class="card scroll"><table class="t"><thead><tr><th>Месяц</th><th class="n">Начислено</th><th class="n">Получено</th><th class="n">Долг</th></tr></thead><tbody>${F.rows.map(r=>`<tr data-a="feeMonth" data-k="${r.k}" style="cursor:pointer"><td>${FEE_OPEN===r.k?'▾':'▸'} ${monthTitle(r.k)}</td><td class="n">${r.acc?money(r.acc):'–'}</td><td class="n ${r.got?'up':''}">${r.got?money(r.got):'–'}</td><td class="n ${r.debt>0.004?'down':''}">${r.debt>0.004?money(r.debt):'–'}</td></tr>${FEE_OPEN===r.k?det(r):''}`).join('')}</tbody></table>
+  ${F.nodate?`<div class="callout" style="margin:10px 0 0">Оплаты без даты: ${money(F.nodate)} (${[...new Set(F.nodateList.map(x=>x.p.name+', '+x.r.period))].map(esc).join('; ')}). Откройте начисление у клиента и укажите дату – тогда сумма попадёт в нужный месяц.</div>`:''}
+  <p class="small muted" style="margin:8px 0 0">«Начислено» – комиссии за этот месяц. «Получено» – деньги, пришедшие в этом месяце, по дате оплаты (за любой период). «Долг» – сколько клиенты должны на конец месяца. Нажмите на месяц, чтобы увидеть детали по клиентам.</p></div>`;
+}
+function payHtml(p,r){
+  const left=feeLeft(r);const ps=r.pays||[];
+  return`<div class="card"><div class="kv"><span>Комиссия за ${monthTitle(r.period).toLowerCase()}</span><span class="v">${money(feeDue(r))}</span><span>Management / performance</span><span class="v">${money(num(r.mf))} / ${money(num(r.pf))}</span><span>Получено</span><span class="v up">${money(feePaid(r))}</span><span><b>Осталось получить</b></span><span class="v"><b>${money(left)}</b></span></div></div>
+  ${ps.length?`<h3 style="margin:18px 0 8px">Оплаты</h3><div class="list">${ps.map(x=>`<div class="row" style="gap:8px"><input class="inp" type="date" data-pay="d" data-r="${r.id}" data-k="${x.id}" value="${x.d||''}" aria-label="Дата оплаты" style="flex:1.2"><input class="inp" inputmode="decimal" data-pay="amt" data-r="${r.id}" data-k="${x.id}" value="${x.amt}" aria-label="Сумма, $" style="flex:1"><button class="icon-btn" data-a="delPay" data-r="${r.id}" data-k="${x.id}" aria-label="Удалить оплату">✕</button></div>`).join('')}</div>${ps.some(x=>!x.d)?'<p class="small down">Укажите дату оплаты – без неё платёж не попадёт в статистику по месяцам.</p>':''}`:''}
+  ${left>0.004?`<form id="payf" onsubmit="return false"><input type="hidden" name="rid" value="${r.id}"><h3 style="margin:18px 0 8px">${ps.length?'Добавить оплату':'Отметить оплату'}</h3><div class="grid2"><div class="field"><label>Дата поступления</label><input class="inp" type="date" name="d" value="${today()}"></div><div class="field"><label>Сумма, $</label><input class="inp" inputmode="decimal" name="amt" value="${left}"></div></div><div class="btns"><button class="btn gold" data-a="addPay">${ps.length?'Добавить оплату':'Оплачено'}</button></div></form>`:''}
+  <div class="btns"><button class="btn" data-a="closeSheet">Готово</button></div>`;
+}
+function feeHelpHtml(p){
+  const f=p.fees;const t=f.tiers.slice().sort((a,b)=>a.from-b.from);const per=f.annual?'Management fee – годовая ставка, каждый месяц начисляется 1/12.':'Management fee – месячная ставка, начисляется целиком каждый месяц.';
+  const P_=x=>nf(2).format(x)+'%';
+  return`<div class="small" style="line-height:1.55">
+  <h3 style="margin:4px 0 6px">1. Ставки</h3><p style="margin:0 0 10px">Уровень выбирается по капиталу клиента на конец месяца. Ставки клиента «${esc(p.name)}»: ${t.map(x=>`от ${money(x.from,{dec:0})} – management ${P_(x.mgmt)}, performance ${P_(x.perf)}`).join('; ')}. ${per}</p>
+  <h3 style="margin:0 0 6px">2. Management fee</h3><p style="margin:0 0 10px">Плата за управление, берётся от капитала на конец месяца (стоимость активов по текущим ценам минус долги по займам). ${f.mode==='progressive'?'Режим «ступенчато»: каждая часть капитала идёт по ставке своего уровня, поэтому при переходе порога комиссия не проседает.':'Режим «весь капитал по ставке уровня»: весь капитал считается по ставке уровня, в который он попал. На пороге комиссия может уменьшиться при росте капитала – чтобы этого не было, выберите режим «ступенчато».'}</p>
+  <h3 style="margin:0 0 6px">3. Performance fee</h3><p style="margin:0 0 10px">Прибыль за месяц = капитал на конец − капитал на начало − (пополнения − выводы). Новые деньги клиента прибылью не считаются. Ставка берётся по уровню капитала на конец месяца. ${f.hwm?`High-water mark включён: комиссия берётся только с прибыли выше прошлого пика (пик сдвигается на пополнения и выводы). После расчёта пик поднимается до капитала на конец, если тот выше. Текущий пик: ${p.hwm!=null?money(p.hwm):'появится после первого расчёта'}. Если месяц был убыточным, комиссия не берётся, пока капитал не превысит пик.`:'High-water mark выключен: комиссия берётся с любой положительной прибыли за месяц, в том числе с восстановления после убыточного месяца.'}</p>
+  <h3 style="margin:0 0 6px">4. Расчёт за месяц</h3><p style="margin:0 0 10px">«Капитал на начало» – конец прошлого начисления, иначе снимок капитала до начала месяца. «Капитал на конец» – для текущего месяца сейчас, для прошлого – снимок, ближайший к концу месяца. «Пополнения минус выводы» – покупки минус продажи за месяц. Все поля можно поправить. Комиссия из капитала клиента не вычитается – клиент оплачивает её отдельно.</p>
+  <h3 style="margin:0 0 6px">5. Оплата и статистика</h3><p style="margin:0">Нажмите на статус в таблице «Начисления» и укажите дату и сумму поступления, можно частями. В блоке «Комиссии по месяцам» видно, сколько начислено за каждый месяц и сколько денег пришло в этом месяце по дате оплаты, а также долг клиентов на конец месяца.</p></div>
+  <div class="btns"><button class="btn primary" data-a="closeSheet">Понятно</button></div>`;
 }
 function feeCfgHtml(p){
   const f=p.fees;
@@ -1055,19 +1108,26 @@ function feeCfgHtml(p){
   <div class="btns"><button class="btn primary" data-a="closeSheet">Готово</button></div>`;
 }
 function monthDefaults(p,ym){
-  const start=ym+'-01';const L=ledger(p,S.prices);
+  const start=ym+'-01';const L=ledger(p,S.prices);const notes=[];
   const prevRec=p.feeRecs.filter(r=>r.period<ym).sort((a,b)=>a.period<b.period?1:-1)[0];
   const before=p.snaps.filter(s=>s.d<start).slice(-1)[0];
-  const s=prevRec?prevRec.end:before?before.v:ledger(p,S.prices,new Date(new Date(start)-864e5).toISOString().slice(0,10)).net;
-  const isCur=ym===today().slice(0,7);const inMonth=p.snaps.filter(x=>ymd(x.d)===ym).slice(-1)[0];
-  const e=isCur||!inMonth?L.value:inMonth.v;
-  return{start:r2(s),end:r2(e),flows:r2(flowsIn(p,ym))};
+  let s;if(prevRec)s=prevRec.end;else if(before)s=before.v;else{s=ledger(p,S.prices,new Date(new Date(start)-864e5).toISOString().slice(0,10)).net;if(s>0)notes.push('Нет снимка капитала на начало месяца – подставлены чистые вложения. Проверьте «Капитал на начало».')}
+  const cur=today().slice(0,7);let e;
+  if(ym>=cur)e=L.value;
+  else{const nx=new Date(Date.UTC(+ym.slice(0,4),+ym.slice(5,7),1));const next=nx.toISOString().slice(0,10);const end=new Date(nx-864e5).toISOString().slice(0,10);const lim=new Date(+nx+6*864e5).toISOString().slice(0,10);
+    const dist=d=>Math.abs(new Date(d)-new Date(end))/864e5;
+    const c=[p.snaps.filter(x=>ymd(x.d)===ym).slice(-1)[0],p.snaps.find(x=>x.d>=next&&x.d<=lim)].filter(Boolean).sort((a,b)=>dist(a.d)-dist(b.d))[0];
+    if(c){e=c.v;if(dist(c.d)>1)notes.push(`Капитал на конец взят по снимку от ${ddmm(c.d)} – ближайшему к концу месяца. Если знаете точную сумму на ${ddmm(end)}, впишите её.`)}
+    else{e=L.value;notes.push('За этот месяц нет снимка капитала – подставлен текущий капитал. Впишите капитал на конец месяца вручную, иначе комиссия посчитается неверно.')}}
+  return{start:r2(s),end:r2(e),flows:r2(flowsIn(p,ym)),notes};
 }
+const cmNotes=n=>(n||[]).map(x=>`<div class="callout" style="margin:0 0 12px">${x}</div>`).join('');
 function closeMonthHtml(p,o){
   const c=feeCalc(p,num(o.start),num(o.end),num(o.flows));
   return`<form id="cmf" onsubmit="return false"><div class="field"><label>Месяц</label><input class="inp" type="month" name="period" value="${o.period}" data-cm="period"></div>
   <div class="grid2"><div class="field"><label>Капитал на начало, $</label><input class="inp" inputmode="decimal" name="start" value="${o.start}" data-cm></div><div class="field"><label>Капитал на конец, $</label><input class="inp" inputmode="decimal" name="end" value="${o.end}" data-cm></div></div>
   <div class="field"><label>Пополнения минус выводы за месяц, $</label><input class="inp" inputmode="decimal" name="flows" value="${o.flows}" data-cm></div>
+  <div id="cmNotes">${cmNotes(o.notes)}</div>
   <div id="cmPrev">${cmPreview(p,c)}</div>
   <div class="btns"><button class="btn gold" data-a="saveMonth">Начислить</button></div></form>`;
 }
@@ -1079,13 +1139,20 @@ function cmPreview(p,c){return`<div class="card"><div class="kv">
   <span><b>К оплате</b></span><span class="v">${money(c.total)}</span></div></div>`}
 function reportText(p){
   const L=ledger(p,S.prices);const m=metrics(p,L);const as=byAsset(L);
-  const last=p.feeRecs[p.feeRecs.length-1];
-  let t=`Отчёт по портфелю: ${p.name}\n${new Date().toLocaleDateString('ru-RU')}\n\nСтоимость: ${money(L.value)}${L.debt>0.01?`\nАктивы: ${money(L.gross)}\nДолг: ${money(L.debt)}`:''}\nВложено: ${money(L.net)}\nРезультат: ${money(L.pnl,{sign:true})} (${pct(m.totalRet,{sign:true})})\n`;
+  const last=p.feeRecs[p.feeRecs.length-1];const ym=today().slice(0,7);
+  let t=`${p.owner?'Отчёт по моему портфелю':'Отчёт по портфелю: '+p.name}\n${new Date().toLocaleDateString('ru-RU')}\n\nСтоимость: ${money(L.value)}${L.debt>0.01?`\nАктивы: ${money(L.gross)}\nДолг: ${money(L.debt)}`:''}\nВложено: ${money(L.net)}\nРезультат: ${money(L.pnl,{sign:true})} (${pct(m.totalRet,{sign:true})})\n`;
   if(m.twr!=null)t+=`Доходность управления: ${pct(m.twr,{sign:true})}${m.btc!=null?`, BTC за период ${pct(m.btc,{sign:true})}`:''}\nМакс. просадка: ${pct(m.mdd)}\n`;
+  {const before=p.snaps.filter(s=>s.d<ym+'-01').slice(-1)[0];const fl=flowsIn(p,ym);const inc=p.txs.filter(x=>x.type==='income'&&ymd(x.date)===ym).reduce((a,x)=>a+num(x.value),0);
+   const mt=monthTitle(ym).toLowerCase();let mm='';
+   if(before){const res=L.value-before.v-fl;mm+=`Результат: ${money(res,{sign:true})}${before.v>0?' ('+pct(res/before.v,{sign:true})+')':''}\n`}
+   if(fl)mm+=`${fl>0?'Пополнения':'Выводы'}: ${money(Math.abs(fl))}\n`;if(inc)mm+=`Доход (лендинг, боты, опционы): ${money(inc)}\n`;
+   if(mm)t+=`\nЗа ${mt}:\n${mm}`}
   t+=`\nАктивы:\n${(()=>{const ST=assetStats(p);return as.map(a=>isUsdA(a.asset)?`${a.asset}: ${money(a.value)}`:`${a.asset}: ${qfmt(a.qty,a.asset)} (${money(a.value)})${showAvg(a.asset)&&ST[a.asset]&&ST[a.asset].avgBuy?', средняя покупки '+up(ST[a.asset].avgBuy):''}`).join('\n')})()}\n`;
+  {const ls=byLoc(p,L).filter(l=>Math.abs(l.value)>0.5);if(ls.length>1)t+=`\nПлощадки:\n${ls.map(l=>`${locName(p,l.loc)}: ${money(l.value)}`).join('\n')}\n`}
   const z=zones(L);t+=`\nЗона роста ${pct(z.t?z.g/z.t:0)}, зона доходности ${pct(z.t?z.y/z.t:0)}, зона стабильности ${pct(z.t?z.s/z.t:0)}\n`;
   if(p.plan){t+=`Цель: ${money(p.plan.target)} в месяц, прогресс ${pct(m.progress,{dec:0})}\n`}
-  if(last)t+=`\nКомиссия за ${last.period}: ${money(last.mf+last.pf)} (management ${money(last.mf)}, performance ${money(last.pf)})${last.paid?', оплачено':''}\n`;
+  if(!p.owner&&last){const st=feeSt(last);t+=`\nКомиссия за ${monthTitle(last.period).toLowerCase()}: ${money(feeDue(last))} (management ${money(num(last.mf))}, performance ${money(num(last.pf))})${st==='paid'?', оплачено':st==='part'?`, оплачено ${money(feePaid(last))}, осталось ${money(feeLeft(last))}`:st==='wait'?', ожидает оплаты':''}\n`}
+  if(p.owner&&S.portfolios.some(x=>!x.owner&&x.feeRecs.length)){const y=ym.slice(0,4);t+=`\nКомиссии от клиентов:\nПолучено за ${monthTitle(ym).toLowerCase()}: ${money(feeGot(ym+'-01',ym+'-31'))}\nПолучено с начала года: ${money(feeGot(y+'-01-01',y+'-12-31'))}\nЖдёт оплаты: ${money(feeOwed())}\n`}
   return t;
 }
 
@@ -1272,11 +1339,20 @@ const A={
   closeMonth:()=>{const p=P();const ym=today().slice(0,7);openSheet('Комиссия за месяц',closeMonthHtml(p,{period:ym,...monthDefaults(p,ym)}))},
   saveMonth:async()=>{const p=P();const o=readForm('#cmf');if(p.feeRecs.some(r=>r.period===o.period)&&!await ask('За этот месяц уже есть начисление. Добавить ещё одно?','Добавить'))return;
     const c=feeCalc(p,num(o.start),num(o.end),num(o.flows));
-    p.feeRecs.push({id:uid(),period:o.period,start:num(o.start),end:num(o.end),flows:num(o.flows),profit:r2(c.profit),mf:r2(c.mf),pf:r2(c.pf),mgmtRate:c.tier.mgmt,perfRate:c.tier.perf,hwmBefore:p.hwm,paid:false});
+    p.feeRecs.push({id:uid(),period:o.period,start:num(o.start),end:num(o.end),flows:num(o.flows),profit:r2(c.profit),mf:r2(c.mf),pf:r2(c.pf),mgmtRate:c.tier.mgmt,perfRate:c.tier.perf,hwmBefore:p.hwm,paid:false,pays:[]});syncPaid(p.feeRecs[p.feeRecs.length-1]);
     p.feeRecs.sort((a,b)=>a.period<b.period?-1:1);if(p.fees.hwm)p.hwm=r2(c.newHwm);closeSheet();save();haptic();toast('Комиссия начислена')},
-  togglePaid:d=>{const r=P().feeRecs.find(x=>x.id===d.k);if(r){r.paid=!r.paid;save()}},
+  payFee:d=>{const p=P();const r=p.feeRecs.find(x=>x.id===d.k);if(r)openSheet('Оплата: '+p.name,payHtml(p,r))},
+  addPay:()=>{const p=P();const o=readForm('#payf');const r=p.feeRecs.find(x=>x.id===o.rid);if(!r)return;const amt=r2(num(o.amt));if(!(amt>0))return toast('Укажите сумму');if(!o.d)return toast('Укажите дату поступления');
+    r.pays=r.pays||[];r.pays.push({id:uid(),d:o.d,amt});r.pays.sort((a,b)=>(a.d||'')<(b.d||'')?-1:1);syncPaid(r);save();haptic();openSheet('Оплата: '+p.name,payHtml(p,r));toast(feeSt(r)==='paid'?'Комиссия оплачена':'Оплата добавлена')},
+  delPay:async d=>{const p=P();const r=p.feeRecs.find(x=>x.id===d.r);if(!r)return;if(!await ask('Удалить эту оплату?'))return openSheet('Оплата: '+p.name,payHtml(p,r));r.pays=(r.pays||[]).filter(x=>x.id!==d.k);syncPaid(r);save();openSheet('Оплата: '+p.name,payHtml(p,r))},
+  feeMonth:d=>{FEE_OPEN=FEE_OPEN===d.k?'':d.k;render()},
+  feeHelp:()=>openSheet('Как считается комиссия',feeHelpHtml(P())),
   delFee:async d=>{const p=P();const r=p.feeRecs.find(x=>x.id===d.k);if(!r||!await ask(`Удалить начисление за ${r.period}?`))return;if(p.feeRecs[p.feeRecs.length-1]===r)p.hwm=r.hwmBefore??null;p.feeRecs=p.feeRecs.filter(x=>x!==r);save()},
-  report:()=>{const t=reportText(P());openSheet('Отчёт клиенту',`<textarea class="inp" id="rep" style="min-height:260px;font-size:14px">${esc(t)}</textarea><div class="btns"><button class="btn primary" data-a="copyRep">Скопировать</button>${inTG?'<button class="btn" data-a="shareRep">Отправить в Telegram</button>':''}</div>`)},
+  report:()=>{const p=P();const t=reportText(p);const self=inTG&&apiUrl();openSheet(p.owner?'Отчёт по моему портфелю':'Отчёт клиенту',`<p class="small muted" style="margin-top:0">Текст можно поправить перед отправкой.</p><textarea class="inp" id="rep" style="min-height:300px;font-size:14px">${esc(t)}</textarea><div class="btns">${self?'<button class="btn primary" data-a="sendRepSelf">Отправить себе в чат</button>':''}<button class="btn ${self?'':'primary'}" data-a="copyRep">Скопировать</button>${inTG?`<button class="btn" data-a="shareRep">${p.owner?'Переслать в Telegram':'Отправить в Telegram'}</button>`:''}</div>${inTG&&!self?'<p class="small muted">Чтобы отправлять отчёт себе в чат с ботом, откройте приложение кнопкой из бота.</p>':''}`)},
+  sendRepSelf:async(d,el)=>{const text=($('#rep')||{}).value||'';if(!text.trim())return toast('Отчёт пустой');if(el)el.disabled=true;
+    try{const j=await api('/report',{text});if(!j.sent)throw new Error('old');toast('Отчёт отправлен в чат с ботом');haptic()}
+    catch(e){toast(e.message==='old'?'Обновите код сервера бота – в нём ещё нет отправки отчёта':e.message==='auth'?'Сессия устарела – переоткройте приложение':'Не удалось отправить. Скопируйте отчёт или перешлите через Telegram')}
+    finally{if(el)el.disabled=false}},
   copyRep:()=>copy($('#rep').value),
   shareRep:()=>{tg.openTelegramLink('https://t.me/share/url?url='+encodeURIComponent(' ')+'&text='+encodeURIComponent($('#rep').value))},
   addTab:d=>{const n=$('#cuName');if(n){CU.name=n.value;CU.zone=$('#cuZone').value;const pz=$('#cuPrice');if(pz)CU.price=pz.value}ADD_TAB=d.k;openSheet('Новый актив',addAssetHtml())},
@@ -1337,6 +1413,7 @@ document.addEventListener('change',e=>{
   if(el.dataset.newsel&&el.closest('#txf')&&readForm('#txf').type==='revalue'&&el.value!=='__new'){const o=readForm('#txf');o.fund='';openSheet(o.id?'Операция':'Новая операция',txForm(o));return}
   if(el.dataset.newsel){const box=document.querySelector(`[data-newloc="${el.dataset.newsel}"]`);if(box)box.hidden=el.value!=='__new';return}
   if(el.dataset.pf){p[el.dataset.pf]=el.value;save();return}
+  if(el.dataset.pay){const pp=P();const r=pp.feeRecs.find(x=>x.id===el.dataset.r);const x=r&&(r.pays||[]).find(y=>y.id===el.dataset.k);if(!x)return;if(el.dataset.pay==='amt'){const v=r2(num(el.value));if(!(v>0)){el.value=x.amt;return toast('Сумма должна быть больше нуля')}x.amt=v}else x.d=el.value;r.pays.sort((a,b)=>(a.d||'')<(b.d||'')?-1:1);syncPaid(r);save();openSheet('Оплата: '+pp.name,payHtml(pp,r));return}
   if(el.dataset.tier){p.fees.tiers[+el.dataset.i][el.dataset.tier]=num(el.value);save({silent:true});return}
   if(el.dataset.fee){const k=el.dataset.fee;p.fees[k]=k==='mode'?el.value:el.value==='1';save({silent:true});return}
   if(el.dataset.loc){const l=p.locations.find(x=>x.id===el.dataset.k);if(l){l[el.dataset.loc]=el.value;save({silent:true})}return}
@@ -1360,7 +1437,7 @@ document.addEventListener('input',e=>{
     if(f.total&&(el.dataset.calc==='qty'||el.dataset.calc==='price')&&q>0&&pr>0)f.total.value=r2(q*pr);
     if(el.dataset.calc==='total'&&tot>0){if(q>0)f.price.value=+(tot/q).toPrecision(8);else if(pr>0)f.qty.value=+(tot/pr).toPrecision(8)}
     const box=$('#txInfo');if(box){const html=txInfoHtml(readForm('#txf'));box.innerHTML=html;box.style.display=html?'':'none'}}
-  if(el.dataset.cm!==undefined){const p=P();const f=$('#cmf');if(el.dataset.cm==='period'){const o={period:el.value,...monthDefaults(p,el.value)};['start','end','flows'].forEach(k=>f.elements[k].value=o[k])}
+  if(el.dataset.cm!==undefined){const p=P();const f=$('#cmf');if(el.dataset.cm==='period'){const o={period:el.value,...monthDefaults(p,el.value)};['start','end','flows'].forEach(k=>f.elements[k].value=o[k]);$('#cmNotes').innerHTML=cmNotes(o.notes)}
     const o=readForm('#cmf');$('#cmPrev').innerHTML=cmPreview(p,feeCalc(p,num(o.start),num(o.end),num(o.flows)))}
 });
 
