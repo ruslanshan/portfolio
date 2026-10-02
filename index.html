@@ -144,8 +144,9 @@ table.t td.n,table.t th.n{text-align:right;white-space:nowrap}
 
 <script>
 /* ===================== версия ===================== */
-const APP_VERSION='1.5.8';
+const APP_VERSION='1.5.9';
 const CHANGELOG=[
+ {v:'1.5.9',d:'02.10.2026',items:['Обзор клиента: блок «Комиссии» – сколько начислено и оплачено, результат до и после комиссий, капитал за вычетом комиссий и какую долю прибыли забрали комиссии','Архив квартальных отчётов: отчёты по всем портфелям формируются автоматически после окончания каждого квартала и хранятся в архиве','Кварталы считаются от даты начала инвестиций 06.10.2025 (меняется в Настройках). Прошедшие кварталы сформированы задним числом','Любой отчёт из архива можно прислать в чат с ботом, скопировать или пересоздать, по текущему кварталу – посмотреть предварительный','Отчёт клиенту дополнен итогами по комиссиям']},
  {v:'1.5.8',d:'02.10.2026',items:['Комиссия за месяц: капитал на начало и на конец теперь считается автоматически по операциям клиента и курсам активов на 1-е число месяца и следующего месяца','Пополнения и выводы за месяц подтягиваются из операций, видно отдельно сколько внесено и сколько выведено','Раскрывающийся блок «Как посчитан капитал»: по каждому активу количество × курс на дату','По умолчанию открывается прошлый месяц, если за него ещё нет начисления. Будущий месяц начислить нельзя','Курсы на дату загружаются одним запросом на актив – быстрее и надёжнее']},
  {v:'1.5.7',d:'02.10.2026',items:['Клиенты: новый блок «Комиссии по месяцам» – сколько начислено и сколько получено в каждом месяце по всем клиентам, долг на конец месяца, раскрытие по клиентам','Оплата комиссии записывается с датой и суммой, можно отмечать частичные оплаты. «Получено» считается по дате оплаты','Справка «Как считается комиссия» с текущими ставками клиента','Расчёт за прошлый месяц: если нет снимка капитала, приложение предупреждает и берёт ближайший снимок к концу месяца','Отчёт теперь можно сделать и по своему портфелю – кнопка на «Обзоре» и в «Клиентах». В отчёте появились итоги текущего месяца и площадки','Отчёт можно отправить себе в чат с ботом (нужно обновить код сервера бота)']},
  {v:'1.5.6',d:'01.10.2026',items:['Перевод между площадками теперь оценивается по курсу актива на дату перевода, а не по средней цене покупки. Итоги, движение по месяцам и результат площадки считаются верно','В форме перевода курс на дату подтягивается сам, его можно поправить вручную','Старые переводы пересчитаны по историческому курсу автоматически','В хронологии у перевода видны курс и стоимость в долларах']},
@@ -195,7 +196,7 @@ function newPortfolio(name,owner){return{id:owner?'me':uid(),name,owner:!!owner,
   fees:{tiers:[{from:0,mgmt:3,perf:30},{from:100000,mgmt:2,perf:20}],annual:true,mode:'flat',hwm:true},
   rebal:{freq:'quarter',band:5,last:null,log:[]},
   hwm:null,locations:[],txs:[],snaps:[],feeRecs:[],loans:[]}}
-function defaultState(){return{v:1,savedAt:0,settings:{currency:'USD',fx:{USD:1},fxManual:{},fxAt:null,consRate:10,targetRate:15,riskFree:4,api:''},seenVersion:null,removedAssets:[],locKinds:[...LOC_KINDS],
+function defaultState(){return{v:1,savedAt:0,settings:{currency:'USD',fx:{USD:1},fxManual:{},fxAt:null,consRate:10,targetRate:15,riskFree:4,api:'',qStart:'2025-10-06'},seenVersion:null,reports:[],removedAssets:[],locKinds:[...LOC_KINDS],
   assets:JSON.parse(JSON.stringify(DEFAULT_ASSETS)),prices:{USDT:1,USDC:1},chg:{},pricesAt:null,pricesSrc:'manual',
   portfolios:[newPortfolio('Мой портфель',true)],activeId:'me'}}
 
@@ -208,7 +209,7 @@ let OPEN_ASSET=null;
 const LS_KEY='kapital.v1';
 let dbRef=null,dbTimer=null;
 function loadLocal(){try{const j=localStorage.getItem(LS_KEY);if(j)return JSON.parse(j)}catch(e){}return null}
-function migrate(s){const d=defaultState();s.settings={...d.settings,...(s.settings||{})};s.removedAssets=s.removedAssets||[];s.locKinds=Array.isArray(s.locKinds)&&s.locKinds.length?s.locKinds:[...LOC_KINDS];const defs={};for(const k in d.assets)if(!s.removedAssets.includes(k))defs[k]=d.assets[k];s.assets={...defs,...(s.assets||{})};s.prices={...d.prices,...(s.prices||{})};s.chg=s.chg||{};
+function migrate(s){const d=defaultState();s.settings={...d.settings,...(s.settings||{})};s.removedAssets=s.removedAssets||[];s.locKinds=Array.isArray(s.locKinds)&&s.locKinds.length?s.locKinds:[...LOC_KINDS];const defs={};for(const k in d.assets)if(!s.removedAssets.includes(k))defs[k]=d.assets[k];s.assets={...defs,...(s.assets||{})};s.prices={...d.prices,...(s.prices||{})};s.chg=s.chg||{};s.reports=Array.isArray(s.reports)?s.reports:[];
   (s.portfolios||[]).forEach(p=>{const n=newPortfolio(p.name,p.owner);for(const k in n)if(p[k]===undefined)p[k]=n[k];
     (p.feeRecs||[]).forEach(r=>{if(!Array.isArray(r.pays))r.pays=r.paid&&num(r.mf)+num(r.pf)>0.004?[{id:uid(),d:'',amt:r2(num(r.mf)+num(r.pf))}]:[]})});
   if(!s.portfolios||!s.portfolios.length)s.portfolios=d.portfolios;if(!s.portfolios.find(p=>p.id===s.activeId))s.activeId=s.portfolios[0].id;return s}
@@ -682,14 +683,16 @@ function vHome(){
   <div class="big">${money(L.value)}</div>
   <div class="pl"><span class="${cls(L.pnl)}">${money(L.pnl,{sign:true})} (${pct(pnlPct,{sign:true})})</span><span class="muted">вложено ${money(L.net)}</span></div>
   ${L.debt>0.01?`<div class="pl" style="margin-top:4px"><span class="muted">активы ${money(L.gross)}</span><span class="muted">долг ${money(L.debt)}</span></div>`:''}
+  ${(()=>{if(p.owner)return'';const F=feeTotals(p);if(!(F.acc>0.004))return'';const a=L.pnl-F.acc;return`<div class="pl" style="margin-top:4px"><span class="${cls(a)}">после комиссий ${money(a,{sign:true})}${L.inflow>0?' ('+pct(a/L.inflow,{sign:true})+')':''}</span><span class="muted">комиссии ${money(F.acc)}</span></div>`})()}
   <div class="zonebar"><div class="bar" role="img" aria-label="${ZORDER.map(k=>ZONES[k].full+' '+pct(sh[k])).join(', ')}">
    ${ZORDER.map(k=>`<div class="${k==='growth'?'g':k==='yield'?'y':'s'}" style="width:${sh[k]*100}%"></div>`).join('')}${tz?[tz.growth,tz.growth+tz.yield].filter(v=>v>0.001&&v<0.999).map(v=>`<span class="tick" style="left:calc(${v*100}% - 1px)" title="Целевая граница"></span>`).join(''):''}</div>
    <div class="legend">${ZORDER.map(k=>`<span><span class="dot" style="background:${ZONES[k].c}"></span>${ZONES[k].t}<br><b>${pct(sh[k])}</b> <span class="muted">${money(zv[k])}</span></span>`).join('')}</div>
    ${tz?`<div class="small muted" style="margin-top:4px">Чёрные риски – границы зон по стратегии: рост ${pct(tz.growth,{dec:0})}, доходность ${pct(tz.yield,{dec:0})}, стабильность ${pct(tz.stable,{dec:0})}</div>`:''}
   </div></section>${priceBanner(L)}`;
-  h+=`<div class="btns"><button class="btn primary" data-a="addTx">Добавить операцию</button><button class="btn" data-a="refresh">Обновить курсы</button><button class="btn" data-a="report">Отчёт</button></div>`;
+  h+=`<div class="btns"><button class="btn primary" data-a="addTx">Добавить операцию</button><button class="btn" data-a="refresh">Обновить курсы</button><button class="btn" data-a="report">Отчёт</button><button class="btn" data-a="archive" data-k="${p.id}">Архив отчётов</button></div>`;
   {const risky=activeLoans(p).map(l=>({l,st:loanState(p,l,S.prices)})).filter(x=>x.st.hf<1.5);if(risky.length&&!L.missing.length)h+=`<div class="callout" style="border-color:var(--down)"><b>Займ под угрозой ликвидации.</b> ${risky.map(x=>`${esc(x.l.name)}: health factor ${nf(2).format(x.st.hf)}, ликвидация при ${esc(x.l.collAsset)} ${usd(x.st.liq)}`).join('; ')}. Добавьте залог или погасите часть долга. <button class="btn sm" data-a="goLoans">Займы</button></div>`}
   if(p.plan&&!L.missing.length){const R=rebalCalc(p,L);if(R&&R.total&&(R.outOfBand||R.due)&&R.trades.length)h+=`<div class="callout">${R.outOfBand?`${esc(keyName(R.worst.k))} ушёл от цели на ${nf(1).format(Math.abs(R.worst.dev*100))} п.п. – нужна внеплановая ребалансировка.`:'Подошёл срок плановой ребалансировки.'} <button class="btn sm" data-a="goRebal">Открыть</button></div>`}
+  h+=feeCardHtml(p,L);
   const ST0=assetStats(p);
   if(assets.length){
     h+=`<h2>Сколько чего у ${p.owner?'меня':'клиента'}</h2><div class="tiles">${assets.map(a=>{const sa=ST0[a.asset];const avgB=sa&&sa.avgBuy;const pp=showAvg(a.asset)&&avgB&&a.qty?(a.value/a.qty)/avgB-1:(a.cost?(a.value-a.cost)/a.cost:null);return`<button class="tile" style="text-align:left;cursor:pointer" data-a="openAsset" data-k="${a.asset}"><div class="sym"><span class="dot" style="background:${ZONES[aZone(a.asset)].c}"></span>${esc(a.asset)}</div><div class="q">${isUsdA(a.asset)?money(a.value):qfmt(a.qty,a.asset)}</div><div>${isUsdA(a.asset)?'вложено '+money(a.cost):money(a.value)}</div><div class="small ${cls(pp)}">${S.assets[a.asset]&&S.assets[a.asset].stable?'&nbsp;':pct(pp,{sign:true})+(isUsdA(a.asset)?' к вложенному':' к средней')}</div>${showAvg(a.asset)&&avgB?`<div class="small muted">средняя ${up(avgB)}</div>`:''}</button>`}).join('')}</div>`;
@@ -1059,9 +1062,9 @@ function vClients(){
   <div class="btns"><button class="btn primary" data-a="newClient">Добавить клиента</button></div>`;
   const clients=S.portfolios.filter(x=>!x.owner);
   if(clients.length){const aum=clients.reduce((s,x)=>s+ledger(x,S.prices).value,0);const mf=clients.reduce((s,x)=>s+mgmtFee(x,ledger(x,S.prices).value),0);const ym=today().slice(0,7);
-    h+=`<div class="card" style="margin-top:12px"><div class="kv"><span>Под управлением (AUM), ${clients.length} кл.</span><span class="v">${money(aum)}</span><span>Management fee за месяц по текущему капиталу</span><span class="v">${money(mf)}</span><span>Получено в ${monthIn(ym)}</span><span class="v up">${money(feeGot(ym+'-01',ym+'-31'))}</span><span>Получено с начала года</span><span class="v">${money(feeGot(ym.slice(0,4)+'-01-01',ym.slice(0,4)+'-12-31'))}</span><span>Начислено всего</span><span class="v">${money(clients.reduce((s,x)=>s+x.feeRecs.reduce((a,r)=>a+feeDue(r),0),0))}</span><span>Ждёт оплаты</span><span class="v ${feeOwed()>0.004?'down':''}">${money(feeOwed())}</span></div></div>`;
+    h+=`<div class="card" style="margin-top:12px"><div class="kv"><span>Под управлением (AUM), ${clients.length} кл.</span><span class="v">${money(aum)}</span><span>Management fee за месяц по текущему капиталу</span><span class="v">${money(mf)}</span><span>Получено в ${monthIn(ym)}</span><span class="v up">${money(feeGot(ym+'-01',ym+'-31'))}</span><span>Получено с начала года</span><span class="v">${money(feeGot(ym.slice(0,4)+'-01-01',ym.slice(0,4)+'-12-31'))}</span><span>Начислено всего</span><span class="v">${money(clients.reduce((s,x)=>s+x.feeRecs.reduce((a,r)=>a+feeDue(r),0),0))}</span><span>Ждёт оплаты</span><span class="v ${feeOwed()>0.004?'down':''}">${money(feeOwed())}</span></div><div class="btns"><button class="btn sm" data-a="archive" data-k="">Архив отчётов</button></div></div>`;
     h+=feeMonthsHtml()}
-  if(p.owner){h+=`<h2>Мой портфель</h2><div class="card"><p class="small muted" style="margin:0">Отчёт по своим инвестициям: стоимость, результат за всё время и за текущий месяц, активы, площадки${clients.length?', комиссии от клиентов':''}.</p><div class="btns"><button class="btn primary" data-a="report">Отчёт по моему портфелю</button></div></div><p class="muted small" style="margin-top:14px">Выберите клиента, чтобы настроить комиссии и увидеть начисления.</p>`;return h}
+  if(p.owner){h+=`<h2>Мой портфель</h2><div class="card"><p class="small muted" style="margin:0">Отчёт по своим инвестициям: стоимость, результат за всё время и за текущий месяц, активы, площадки${clients.length?', комиссии от клиентов':''}.</p><div class="btns"><button class="btn primary" data-a="report">Отчёт по моему портфелю</button><button class="btn" data-a="archive" data-k="${p.id}">Архив отчётов</button></div></div><p class="muted small" style="margin-top:14px">Выберите клиента, чтобы настроить комиссии и увидеть начисления.</p>`;return h}
   const L=ledger(p,S.prices);const t=tierFor(p,L.value);
   h+=`<h2>${esc(p.name)}: комиссии</h2><div class="card"><div class="kv">
    <span>Активы под управлением (AUM)</span><span class="v">${money(L.value)}</span>
@@ -1125,11 +1128,12 @@ async function capitalAt(p,d){
   const need=new Set(L0.pos.filter(x=>Math.abs(x.qty)>1e-12).map(x=>x.asset));
   (p.loans||[]).forEach(l=>{if(p.txs.some(t=>t.loanId===l.id&&t.type==='borrow'&&t.date<=until)){need.add(l.debtAsset);need.add(l.collAsset)}});
   const pr={};
-  for(const a of need){if(!a)continue;if(isUsdA(a)){pr[a]=1;continue}const v=await histPrice(a,d);if(v>0)pr[a]=v}
+  const approx=[];
+  for(const a of need){if(!a)continue;if(isUsdA(a)){pr[a]=1;continue}const v=await histPrice(a,d);if(v>0)pr[a]=v;else if(!(S.assets[a]&&S.assets[a].cg)&&S.prices[a]>0){pr[a]=S.prices[a];approx.push(a)}}
   const L=ledger(p,pr,until);
-  return{v:r2(L.value),debt:L.debt,rows:capRows(L),miss:L.missing,d,live:d>=today()};
+  return{v:r2(L.value),debt:L.debt,rows:capRows(L),locs:byLoc(p,L).filter(l=>Math.abs(l.value)>0.5),miss:L.missing,approx,d,live:d>=today()};
 }
-function capitalNow(p){const L=ledger(p,S.prices);return{v:r2(L.value),debt:L.debt,rows:capRows(L),miss:L.missing,d:today(),live:true,now:true}}
+function capitalNow(p){const L=ledger(p,S.prices);return{v:r2(L.value),debt:L.debt,rows:capRows(L),locs:byLoc(p,L).filter(l=>Math.abs(l.value)>0.5),miss:L.missing,approx:[],d:today(),live:true,now:true}}
 async function monthAuto(p,ym){
   const cur=today().slice(0,7);if(!/^\d{4}-\d{2}$/.test(ym||''))return null;
   if(ym>cur)return{future:true,notes:['Этот месяц ещё не наступил – начислить комиссию за него нельзя. Выберите текущий или прошедший месяц.']};
@@ -1140,11 +1144,102 @@ async function monthAuto(p,ym){
   if(ym===cur)notes.push('Месяц ещё идёт: капитал на конец взят на сегодня, по текущим курсам. Окончательно комиссию лучше считать после окончания месяца.');
   const miss=[...new Set([...s.miss,...e.miss])];
   if(miss.length)notes.push(`Не удалось получить курс на дату для: ${miss.map(esc).join(', ')}. Стоимость этих активов не учтена – выберите месяц заново чуть позже или впишите капитал вручную.`);
+  const ap=[...new Set([...(s.approx||[]),...(e.approx||[])])];if(ap.length)notes.push(`Нет истории цен для: ${ap.map(esc).join(', ')} – оценены по текущему курсу.`);
   const pm=prevDay(d0).slice(0,7);
   const prev=p.feeRecs.filter(r=>r.period===pm).slice(-1)[0];
   if(prev&&Math.abs(num(prev.end)-s.v)>Math.max(1,s.v*0.005))notes.push(`В начислении за ${monthTitle(pm).toLowerCase()} капитал на конец был ${money(num(prev.end))}, а по операциям и курсам на ${ddmm(d0)} получается ${money(s.v)}. Подставлено значение по данным системы.`);
   return{start:s.v,end:e.v,flows:r2(dep-wd),dep,wd,ndep:tx.filter(t=>t.type==='buy').length,nwd:tx.filter(t=>t.type==='sell').length,notes,s,e};
 }
+/* ===================== комиссии клиента: итоги и влияние на капитал ===================== */
+function feeTotals(p,upto){const rs=(p.feeRecs||[]).filter(r=>!upto||prevDay(nextMonth1(r.period))<=upto);
+  return{acc:rs.reduce((a,r)=>a+feeDue(r),0),mf:rs.reduce((a,r)=>a+num(r.mf),0),pf:rs.reduce((a,r)=>a+num(r.pf),0),paid:rs.reduce((a,r)=>a+feePaid(r),0),left:rs.reduce((a,r)=>a+feeLeft(r),0),n:rs.length}}
+function feeCardHtml(p,L){
+  if(p.owner)return'';const F=feeTotals(p);
+  if(!F.n)return`<h2>Комиссии</h2><div class="card"><p class="small muted" style="margin:0">Комиссии клиенту ещё не начислялись.</p><div class="btns"><button class="btn" data-a="closeMonth">Рассчитать комиссию за месяц</button></div></div>`;
+  const base=L.inflow>0?L.inflow:null;const after=L.pnl-F.acc;
+  return`<h2>Комиссии</h2><div class="card"><div class="kv">
+  <span>Начислено за всё время</span><span class="v">${money(F.acc)}</span>
+  <span>Management / performance</span><span class="v">${money(F.mf)} / ${money(F.pf)}</span>
+  <span>Оплачено</span><span class="v up">${money(F.paid)}</span>
+  <span>Ждёт оплаты</span><span class="v ${F.left>0.004?'down':''}">${money(F.left)}</span>
+  <span>Результат до комиссий</span><span class="v ${cls(L.pnl)}">${money(L.pnl,{sign:true})}${base?' ('+pct(L.pnl/base,{sign:true})+')':''}</span>
+  <span><b>Результат после комиссий</b></span><span class="v ${cls(after)}"><b>${money(after,{sign:true})}</b>${base?' ('+pct(after/base,{sign:true})+')':''}</span>
+  <span>Капитал за вычетом комиссий</span><span class="v">${money(L.value-F.acc)}${L.value>0?' (−'+pct(F.acc/L.value).replace('−','')+')':''}</span>
+  </div><p class="small muted" style="margin:10px 0 0">${L.pnl>0.004?`Комиссии забрали ${pct(F.acc/L.pnl)} заработанной прибыли. `:''}Комиссии оплачиваются отдельно и не списываются с активов. «Капитал за вычетом комиссий» – сколько было бы в портфеле, если бы комиссии платились из него.</p>
+  <div class="btns"><button class="btn sm" data-a="goFees">Начисления и оплаты</button></div></div>`;
+}
+
+/* ===================== архив квартальных отчётов ===================== */
+function addMonthsD(d,n){const [y,m,dd]=d.split('-').map(Number);const t=new Date(Date.UTC(y,m-1+n,1));const last=new Date(Date.UTC(t.getUTCFullYear(),t.getUTCMonth()+1,0)).getUTCDate();t.setUTCDate(Math.min(dd,last));return t.toISOString().slice(0,10)}
+const nextDay=d=>new Date(Date.parse(d+'T00:00:00Z')+864e5).toISOString().slice(0,10);
+function quarters(){const s0=/^\d{4}-\d{2}-\d{2}$/.test(S.settings.qStart||'')?S.settings.qStart:'2025-10-06';const td=today();const out=[];
+  for(let k=0;k<400;k++){const from=addMonthsD(s0,3*k);if(from>td)break;const next=addMonthsD(s0,3*(k+1));out.push({n:k+1,from,to:prevDay(next),next,done:next<=td})}return out}
+const qTitle=r=>`Квартал ${r.n}: ${ddmm(r.from)} – ${ddmm(r.to)}`;
+async function quarterReport(p,q){
+  const s=await capitalAt(p,q.from);const e=q.done?await capitalAt(p,q.next):capitalNow(p);
+  if([...s.miss,...e.miss].some(a=>S.assets[a]&&S.assets[a].cg))throw new Error('prices');
+  const endD=q.done?q.to:today();const endNext=nextDay(endD);
+  const tx=p.txs.filter(t=>t.date>=q.from&&t.date<=endD);
+  const sumT=ty=>tx.filter(t=>t.type===ty).reduce((a,t)=>a+num(t.value),0);
+  const dep=sumT('buy'),wd=sumT('sell'),inc=sumT('income');const flows=dep-wd;const res=e.v-s.v-flows;
+  const T0=Date.parse(q.from),T1=Date.parse(endNext);let wf=0;
+  tx.forEach(t=>{if(t.type!=='buy'&&t.type!=='sell')return;const f=t.type==='buy'?num(t.value):-num(t.value);wf+=f*Math.max(0,Math.min(1,(T1-Date.parse(t.date))/(T1-T0)))});
+  const base=s.v+wf;const ret=base>0?res/base:null;
+  const Lt=ledger(p,{},endD);const totRes=e.v+Lt.outflow-Lt.inflow;const totRet=Lt.inflow>0?totRes/Lt.inflow:null;
+  const qr=(p.feeRecs||[]).filter(r=>{const me=prevDay(nextMonth1(r.period));return me>=q.from&&me<=q.to});
+  const fq=qr.reduce((a,r)=>a+feeDue(r),0),mfq=qr.reduce((a,r)=>a+num(r.mf),0),pfq=qr.reduce((a,r)=>a+num(r.pf),0);
+  const paidQ=(p.feeRecs||[]).reduce((a,r)=>a+(r.pays||[]).filter(x=>x.d&&x.d>=q.from&&x.d<=endD).reduce((b,x)=>b+num(x.amt),0),0);
+  const FT=feeTotals(p,endD);const sg=v=>money(v,{sign:true});const pc=v=>v==null?'':` (${pct(v,{sign:true})})`;
+  let t=`${q.done?'Отчёт':'Предварительный отчёт'} за квартал ${q.n}\nПериод: ${ddmm(q.from)} – ${ddmm(q.to)}${q.done?'':` (данные на ${ddmm(today())})`}\n${p.owner?'Мой портфель':'Портфель: '+p.name}\nСформирован: ${ddmm(today())}\n\n`;
+  t+=`Капитал на начало: ${money(s.v)}\nКапитал на конец: ${money(e.v)}\nПополнения: ${money(dep)}\nВыводы: ${money(wd)}\nРезультат за квартал: ${sg(res)}${pc(ret)}\n`;
+  if(inc>0.004)t+=`В т.ч. доход (лендинг, боты, опционы): ${money(inc)}\n`;
+  if(!p.owner&&(fq>0.004||FT.acc>0.004)){const r2_=res-fq;t+=`\nКомиссии за квартал: ${money(fq)}${fq>0.004?` (management ${money(mfq)}, performance ${money(pfq)})`:''}\nРезультат после комиссий: ${sg(r2_)}${pc(base>0?r2_/base:null)}\nОплачено комиссий в квартале: ${money(paidQ)}\n`}
+  if(p.owner){const got=feeGot(q.from,endD);if(got>0.004||S.portfolios.some(x=>!x.owner&&x.feeRecs.length))t+=`\nКомиссии от клиентов, получено в квартале: ${money(got)}\n`}
+  t+=`\nС начала инвестиций (на ${ddmm(endD)}):\nВложено: ${money(Lt.inflow-Lt.outflow)}\nРезультат: ${sg(totRes)}${pc(totRet)}\n`;
+  if(!p.owner&&FT.acc>0.004)t+=`Комиссии за всё время: ${money(FT.acc)}\nРезультат после комиссий: ${sg(totRes-FT.acc)}${pc(Lt.inflow>0?(totRes-FT.acc)/Lt.inflow:null)}\n`;
+  if(e.rows.length)t+=`\nАктивы на конец квартала:\n${e.rows.map(r=>isUsdA(r.asset)?`${r.asset}: ${money(r.value)}`:isDollarA(r.asset)?`${r.asset}: ${qfmt(r.qty,r.asset)} (${money(r.value)})`:`${r.asset}: ${qfmt(r.qty,r.asset)} × ${up(r.price)} = ${money(r.value)}`).join('\n')}\n`;
+  if(e.debt>0.01)t+=`Долг по займам: ${money(e.debt)}\n`;
+  if(e.locs&&e.locs.length>1)t+=`\nПлощадки:\n${e.locs.map(l=>`${locName(p,l.loc)}: ${money(l.value)}`).join('\n')}\n`;
+  const ap=[...new Set([...(s.approx||[]),...(e.approx||[])])];if(ap.length)t+=`\nПо текущему курсу (нет истории цен): ${ap.join(', ')}\n`;
+  return{id:uid(),pid:p.id,name:p.name,owner:!!p.owner,n:q.n,from:q.from,to:q.to,at:Date.now(),text:t,sum:{start:s.v,end:e.v,res,ret,fees:fq}};
+}
+const repActive=(p,q)=>p.txs.some(t=>t.date<=q.to);
+let REP_BUSY=false;
+async function genReports(quiet){
+  if(REP_BUSY)return-1;REP_BUSY=true;let n=0,fail=0;
+  try{for(const q of quarters().filter(q=>q.done))for(const p of S.portfolios){
+      if(S.reports.some(r=>r.pid===p.id&&r.from===q.from&&r.to===q.to)||!repActive(p,q))continue;
+      try{S.reports.push(await quarterReport(p,q));n++}catch(e){fail++}}}
+  finally{REP_BUSY=false}
+  if(n){S.reports.sort((a,b)=>a.from<b.from?-1:a.from>b.from?1:(b.owner-a.owner));save({silent:true});if(!quiet)toast(`В архив добавлено отчётов: ${n}`);if(!$('#sheet').hidden&&$('#arch'))openSheet('Архив отчётов',archiveHtml())}
+  return fail?-fail:n;
+}
+let ARCH_F='';
+const pName=r=>{const p=S.portfolios.find(x=>x.id===r.pid);return p?p.name:r.name};
+function archiveHtml(){
+  const qs=quarters();const cur=qs.find(q=>!q.done);const s0=S.settings.qStart||'2025-10-06';
+  const reps=S.reports.filter(r=>!ARCH_F||r.pid===ARCH_F);const bot=inTG&&apiUrl();
+  const pids=[...new Set([...S.portfolios.map(p=>p.id),...S.reports.map(r=>r.pid)])];
+  const byQ={};reps.forEach(r=>{(byQ[r.from+'|'+r.to]=byQ[r.from+'|'+r.to]||[]).push(r)});
+  const curPs=S.portfolios.filter(p=>(!ARCH_F||p.id===ARCH_F)&&cur&&repActive(p,cur));
+  let h=`<div id="arch"><div class="field"><label>Портфель</label><select class="inp" data-arch><option value="">Все портфели</option>${pids.map(id=>{const p=S.portfolios.find(x=>x.id===id);const nm=p?p.name:(S.reports.find(r=>r.pid===id)||{}).name;return`<option value="${id}" ${id===ARCH_F?'selected':''}>${esc(nm||'')}${p&&p.owner?' (мой)':!p?' (удалён)':''}</option>`}).join('')}</select></div>`;
+  if(cur&&curPs.length)h+=`<h3 style="margin:16px 0 8px">Квартал ${cur.n}: ${ddmm(cur.from)} – ${ddmm(cur.to)} <span class="pill">идёт</span></h3><div class="list">${curPs.map(p=>`<div class="row"><div class="grow">${esc(p.name)}${p.owner?' <span class="pill">мой</span>':''}<div class="small muted">отчёт сформируется ${ddmm(cur.next)}</div></div><button class="btn sm" data-a="repCur" data-k="${p.id}">Предварительный</button></div>`).join('')}</div>`;
+  const keys=Object.keys(byQ).sort().reverse();
+  h+=keys.map(k=>{const g=byQ[k].slice().sort((a,b)=>(b.owner-a.owner)||pName(a).localeCompare(pName(b)));const r0=g[0];
+    return`<h3 style="margin:18px 0 8px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><span>${qTitle(r0)}</span>${bot&&g.length>1?`<button class="btn sm" data-a="repSendQ" data-k="${k}">Прислать все в бот</button>`:''}</h3>
+    <div class="list">${g.map(r=>`<button class="row btnrow" data-a="repOpen" data-k="${r.id}"><div class="grow">${esc(pName(r))}${r.owner?' <span class="pill">мой</span>':''}<div class="small muted">на конец ${money(r.sum.end)}</div></div><div class="r ${cls(r.sum.res)}">${money(r.sum.res,{sign:true})}${r.sum.ret!=null?`<div class="small">${pct(r.sum.ret,{sign:true})}</div>`:''}</div></button>`).join('')}</div>`}).join('');
+  if(!keys.length)h+=`<div class="card muted small" style="margin-top:12px">${qs.some(q=>q.done)?'Отчёты за прошедшие кварталы ещё не сформированы – нажмите «Сформировать сейчас».':`Первый квартал закончится ${ddmm(qs[0]?qs[0].to:s0)} – отчёт появится здесь автоматически.`}</div>`;
+  h+=`<p class="small muted" style="margin:16px 0 0">Отчёт за квартал формируется автоматически при первом открытии приложения после окончания квартала и сохраняется в архиве. Кварталы считаются от ${ddmm(s0)} (меняется в Настройках). ${bot?'Откройте отчёт, чтобы прислать его в чат с ботом.':inTG?'Чтобы присылать отчёты в бот, откройте приложение кнопкой из бота.':'Присылать отчёты в бот можно, когда приложение открыто в Telegram.'}</p>
+  <div class="btns"><button class="btn" data-a="genNow">Сформировать сейчас</button>${reps.length?'<button class="btn" data-a="regenAll">Пересоздать показанные</button>':''}</div></div>`;
+  return h;
+}
+function repViewHtml(r,tmp){const bot=inTG&&apiUrl();
+  return`${tmp?'<div class="callout teal small" style="margin-top:0">Квартал ещё идёт – это предварительный отчёт на сегодня, в архив он не сохраняется.</div>':''}<textarea class="inp" id="rep" readonly style="min-height:340px;font-size:14px">${esc(r.text)}</textarea>
+  <div class="btns">${bot?'<button class="btn primary" data-a="sendRepSelf">Прислать в бот</button>':''}<button class="btn ${bot?'':'primary'}" data-a="copyRep">Скопировать</button>${inTG?'<button class="btn" data-a="shareRep">Переслать в Telegram</button>':''}${tmp?'':`<button class="btn" data-a="repRegen" data-k="${r.id}">Пересоздать</button>`}</div>
+  <div class="btns"><button class="btn sm" data-a="archive" data-k="${ARCH_F}">← К архиву</button></div>`}
+async function sendToBot(text){const j=await api('/report',{text});if(!j.sent)throw new Error('old');return true}
+const botErr=e=>e&&e.message==='old'?'Обновите код сервера бота – в нём ещё нет отправки отчёта':e&&e.message==='auth'?'Сессия устарела – переоткройте приложение':'Не удалось отправить. Попробуйте позже';
+
 const cmNotes=n=>(n||[]).map(x=>`<div class="callout" style="margin:0 0 12px">${x}</div>`).join('');
 function capListHtml(c,title){
   const line=r=>isUsdA(r.asset)?`<div class="row" style="padding:5px 0"><span class="grow">${esc(r.asset)}</span><span>${money(r.value)}</span></div>`:`<div class="row" style="padding:5px 0"><span class="grow">${esc(r.asset)}: ${qfmt(r.qty,r.asset)} × ${r.price?(isDollarA(r.asset)?usd(r.price,2):up(r.price)):'нет курса'}</span><span>${money(r.value)}</span></div>`;
@@ -1201,6 +1296,7 @@ function reportText(p){
   {const ls=byLoc(p,L).filter(l=>Math.abs(l.value)>0.5);if(ls.length>1)t+=`\nПлощадки:\n${ls.map(l=>`${locName(p,l.loc)}: ${money(l.value)}`).join('\n')}\n`}
   const z=zones(L);t+=`\nЗона роста ${pct(z.t?z.g/z.t:0)}, зона доходности ${pct(z.t?z.y/z.t:0)}, зона стабильности ${pct(z.t?z.s/z.t:0)}\n`;
   if(p.plan){t+=`Цель: ${money(p.plan.target)} в месяц, прогресс ${pct(m.progress,{dec:0})}\n`}
+  if(!p.owner){const F=feeTotals(p);if(F.acc>0.004){const a=L.pnl-F.acc;t+=`\nКомиссии за всё время: ${money(F.acc)} (management ${money(F.mf)}, performance ${money(F.pf)})\nРезультат после комиссий: ${money(a,{sign:true})}${L.inflow>0?' ('+pct(a/L.inflow,{sign:true})+')':''}\n`}}
   if(!p.owner&&last){const st=feeSt(last);t+=`\nКомиссия за ${monthTitle(last.period).toLowerCase()}: ${money(feeDue(last))} (management ${money(num(last.mf))}, performance ${money(num(last.pf))})${st==='paid'?', оплачено':st==='part'?`, оплачено ${money(feePaid(last))}, осталось ${money(feeLeft(last))}`:st==='wait'?', ожидает оплаты':''}\n`}
   if(p.owner&&S.portfolios.some(x=>!x.owner&&x.feeRecs.length)){const y=ym.slice(0,4);t+=`\nКомиссии от клиентов:\nПолучено за ${monthTitle(ym).toLowerCase()}: ${money(feeGot(ym+'-01',ym+'-31'))}\nПолучено с начала года: ${money(feeGot(y+'-01-01',y+'-12-31'))}\nЖдёт оплаты: ${money(feeOwed())}\n`}
   return t;
@@ -1215,6 +1311,7 @@ function settingsHtml(){
   <div class="grid2"><div class="field"><label>Доходность для проверки капитала, % годовых</label><input class="inp" inputmode="decimal" data-set="consRate" value="${s.consRate}"></div>
   <div class="field"><label>Целевая доходность для расчёта капитала, %</label><input class="inp" inputmode="decimal" data-set="targetRate" value="${s.targetRate}"></div></div>
   <div class="field"><label>Безрисковая ставка для Шарпа и Сортино, %</label><input class="inp" inputmode="decimal" data-set="riskFree" value="${s.riskFree}"></div>
+  <div class="field"><label>Начало инвестиций – от этой даты считаются кварталы для архива отчётов</label><input class="inp" type="date" data-set="qStart" value="${esc(s.qStart||'2025-10-06')}"></div>
   <h3 style="margin:18px 0 8px">Курсы, $</h3><p class="small muted" style="margin-top:0">${S.pricesAt?`Обновлены ${new Date(S.pricesAt).toLocaleString('ru-RU')} (${S.pricesSrc==='live'?'CoinGecko':'вручную'}).`:'Ещё не обновлялись.'} Если автозагрузка недоступна, введите вручную.</p>
   <div class="list">${Object.entries(S.assets).map(([k,a])=>`<div class="row"><div class="grow"><b>${esc(k)}</b> <span class="small muted">${esc(a.name)}</span> <button class="pill" data-a="toggleZone" data-k="${k}" title="Переключить зону" style="border:0;cursor:pointer;background:transparent;padding:0"><span class="dot" style="background:${ZONES[aZone(k)].c}"></span>${ZONES[aZone(k)].t.toLowerCase()}</button>${a.kind?` <span class="small muted">${a.kind==='usd'?'своя, в $':'своя цена'}</span>`:''}${S.chg[k]!=null?` <span class="small ${cls(S.chg[k])}">${pct(S.chg[k]/100,{sign:true})} за 24ч</span>`:''}</div>${a.kind==='usd'?'<span class="small muted" style="width:130px;text-align:right">стоимость через переоценку</span>':`<input class="inp" style="width:130px" inputmode="decimal" data-price="${k}" value="${S.prices[k]??''}" aria-label="Курс ${esc(k)}">`}<button class="icon-btn" data-a="delAsset" data-k="${k}" aria-label="Убрать ${esc(k)} из списка">✕</button></div>`).join('')}</div>
   <div class="btns"><button class="btn" data-a="refresh">Загрузить курсы</button><button class="btn" data-a="addAsset">Добавить актив</button></div>
@@ -1400,9 +1497,23 @@ const A={
   delFee:async d=>{const p=P();const r=p.feeRecs.find(x=>x.id===d.k);if(!r||!await ask(`Удалить начисление за ${r.period}?`))return;if(p.feeRecs[p.feeRecs.length-1]===r)p.hwm=r.hwmBefore??null;p.feeRecs=p.feeRecs.filter(x=>x!==r);save()},
   report:()=>{const p=P();const t=reportText(p);const self=inTG&&apiUrl();openSheet(p.owner?'Отчёт по моему портфелю':'Отчёт клиенту',`<p class="small muted" style="margin-top:0">Текст можно поправить перед отправкой.</p><textarea class="inp" id="rep" style="min-height:300px;font-size:14px">${esc(t)}</textarea><div class="btns">${self?'<button class="btn primary" data-a="sendRepSelf">Отправить себе в чат</button>':''}<button class="btn ${self?'':'primary'}" data-a="copyRep">Скопировать</button>${inTG?`<button class="btn" data-a="shareRep">${p.owner?'Переслать в Telegram':'Отправить в Telegram'}</button>`:''}</div>${inTG&&!self?'<p class="small muted">Чтобы отправлять отчёт себе в чат с ботом, откройте приложение кнопкой из бота.</p>':''}`)},
   sendRepSelf:async(d,el)=>{const text=($('#rep')||{}).value||'';if(!text.trim())return toast('Отчёт пустой');if(el)el.disabled=true;
-    try{const j=await api('/report',{text});if(!j.sent)throw new Error('old');toast('Отчёт отправлен в чат с ботом');haptic()}
-    catch(e){toast(e.message==='old'?'Обновите код сервера бота – в нём ещё нет отправки отчёта':e.message==='auth'?'Сессия устарела – переоткройте приложение':'Не удалось отправить. Скопируйте отчёт или перешлите через Telegram')}
-    finally{if(el)el.disabled=false}},
+    try{await sendToBot(text);toast('Отчёт отправлен в чат с ботом');haptic()}catch(e){toast(botErr(e))}finally{if(el)el.disabled=false}},
+  goFees:()=>{TAB='clients';render();window.scrollTo(0,0)},
+  archive:d=>{ARCH_F=d.k||'';openSheet('Архив отчётов',archiveHtml());genReports(true)},
+  repOpen:d=>{const r=S.reports.find(x=>x.id===d.k);if(r)openSheet(`${pName(r)}: квартал ${r.n}`,repViewHtml(r))},
+  repCur:async d=>{const p=S.portfolios.find(x=>x.id===d.k);const q=quarters().find(x=>!x.done);if(!p||!q)return;toast('Формирую отчёт…');
+    try{const r=await quarterReport(p,q);openSheet(`${p.name}: квартал ${q.n}`,repViewHtml(r,true))}catch(e){toast('Не удалось загрузить курсы на даты. Попробуйте позже')}},
+  repRegen:async d=>{const r=S.reports.find(x=>x.id===d.k);if(!r)return;const p=S.portfolios.find(x=>x.id===r.pid);if(!p)return toast('Портфель удалён – отчёт пересоздать нельзя');
+    if(!await ask('Пересоздать отчёт по текущим данным? Старый текст будет заменён.','Пересоздать'))return A.repOpen({k:r.id});toast('Пересоздаю…');
+    const q=quarters().find(x=>x.from===r.from&&x.to===r.to)||{n:r.n,from:r.from,to:r.to,next:nextDay(r.to),done:true};
+    try{const nr=await quarterReport(p,q);nr.id=r.id;S.reports[S.reports.indexOf(r)]=nr;save({silent:true});A.repOpen({k:r.id});toast('Отчёт пересоздан')}catch(e){toast('Не удалось загрузить курсы на даты. Попробуйте позже');A.repOpen({k:r.id})}},
+  repSendQ:async(d,el)=>{const [f,t]=d.k.split('|');const g=S.reports.filter(r=>r.from===f&&r.to===t&&(!ARCH_F||r.pid===ARCH_F)).sort((a,b)=>(b.owner-a.owner)||pName(a).localeCompare(pName(b)));if(!g.length)return;if(el)el.disabled=true;let n=0;
+    try{for(const r of g){await sendToBot(r.text);n++;toast(`Отправлено ${n} из ${g.length}`);if(n<g.length)await sleep(1200)}haptic();toast(`Отправлено отчётов: ${n}`)}catch(e){toast(botErr(e))}finally{if(el)el.disabled=false}},
+  genNow:async()=>{toast('Проверяю кварталы…');const n=await genReports(true);if(!$('#sheet').hidden&&$('#arch'))openSheet('Архив отчётов',archiveHtml());toast(n>0?`В архив добавлено отчётов: ${n}`:n<0?'Часть отчётов не сформирована – нет курсов на даты. Попробуйте позже':'Новых отчётов нет – все прошедшие кварталы уже в архиве')},
+  regenAll:async()=>{const g=S.reports.filter(r=>(!ARCH_F||r.pid===ARCH_F)&&S.portfolios.some(p=>p.id===r.pid));if(!g.length)return;
+    if(!await ask(`Пересоздать отчётов: ${g.length}? Тексты будут посчитаны заново по текущим данным.`,'Пересоздать'))return A.archive({k:ARCH_F});toast('Пересоздаю…');let n=0,f=0;
+    for(const r of g){const p=S.portfolios.find(x=>x.id===r.pid);const q=quarters().find(x=>x.from===r.from&&x.to===r.to)||{n:r.n,from:r.from,to:r.to,next:nextDay(r.to),done:true};try{const nr=await quarterReport(p,q);nr.id=r.id;S.reports[S.reports.indexOf(r)]=nr;n++}catch(e){f++}}
+    save({silent:true});A.archive({k:ARCH_F});toast(f?`Пересоздано ${n}, не удалось ${f} – нет курсов`:`Пересоздано отчётов: ${n}`)},
   copyRep:()=>copy($('#rep').value),
   shareRep:()=>{tg.openTelegramLink('https://t.me/share/url?url='+encodeURIComponent(' ')+'&text='+encodeURIComponent($('#rep').value))},
   addTab:d=>{const n=$('#cuName');if(n){CU.name=n.value;CU.zone=$('#cuZone').value;const pz=$('#cuPrice');if(pz)CU.price=pz.value}ADD_TAB=d.k;openSheet('Новый актив',addAssetHtml())},
@@ -1467,7 +1578,8 @@ document.addEventListener('change',e=>{
   if(el.dataset.tier){p.fees.tiers[+el.dataset.i][el.dataset.tier]=num(el.value);save({silent:true});return}
   if(el.dataset.fee){const k=el.dataset.fee;p.fees[k]=k==='mode'?el.value:el.value==='1';save({silent:true});return}
   if(el.dataset.loc){const l=p.locations.find(x=>x.id===el.dataset.k);if(l){l[el.dataset.loc]=el.value;save({silent:true})}return}
-  if(el.dataset.set){const k=el.dataset.set;S.settings[k]=(k==='currency'||k==='api')?el.value.trim():num(el.value);save({silent:true});if(k==='currency'||k==='api')openSettings();if(k==='currency'&&S.settings.currency!=='USD'&&!(S.settings.fx[S.settings.currency]>0))refreshFx().then(ok=>{if(ok&&!$('#sheet').hidden)openSettings()});return}
+  if(el.dataset.set){const k=el.dataset.set;if(k==='qStart'&&!/^\d{4}-\d{2}-\d{2}$/.test(el.value)){el.value=S.settings.qStart||'2025-10-06';return}S.settings[k]=(k==='currency'||k==='api'||k==='qStart')?el.value.trim():num(el.value);save({silent:true});if(k==='qStart')setTimeout(()=>genReports(),300);if(k==='currency'||k==='api')openSettings();if(k==='currency'&&S.settings.currency!=='USD'&&!(S.settings.fx[S.settings.currency]>0))refreshFx().then(ok=>{if(ok&&!$('#sheet').hidden)openSettings()});return}
+  if(el.dataset.arch!==undefined){ARCH_F=el.value;openSheet('Архив отчётов',archiveHtml());return}
   if(el.dataset.hf){HF[el.dataset.hf]=el.value;render();return}
   if(el.dataset.kind!==undefined){const i=+el.dataset.kind;const old=S.locKinds[i];const n=cleanName(el.value);if(!n||n===old){el.value=old;return}if(S.locKinds.includes(n)){el.value=old;return toast('Такой тип уже есть')}S.locKinds[i]=n;S.portfolios.forEach(x=>x.locations.forEach(l=>{if(l.kind===old)l.kind=n}));save({silent:true});A.locations();return}
   if(el.dataset.lnf!==undefined){const f=$('#lnf');if(f)f.elements.lt.value=defaultLT(el.value);return}
@@ -1505,6 +1617,7 @@ document.addEventListener('input',e=>{
   refreshPrices(false);
   initCloud();
   setTimeout(priceTransfers,1500);
+  setTimeout(()=>genReports(),5000);
   setInterval(()=>refreshPrices(false),5*60*1000);
 })();
 </script>
